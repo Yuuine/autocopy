@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AutoCopy - 社交媒体文案生成器</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>✨ AutoCopy</h1>
+      <p class="subtitle">智能社交媒体文案生成器</p>
+    </header>
+
+    <main class="main">
+      <form id="generateForm" class="form">
+        <div class="form-section">
+          <h2>基本信息</h2>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label for="articleType">文章类型</label>
+              <select id="articleType" name="articleType" required>
+                <option value="">请选择...</option>
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label for="tone">语气风格</label>
+              <select id="tone" name="tone" required>
+                <option value="">请选择...</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="platform">目标平台</label>
+              <select id="platform" name="platform">
+                <option value="">请选择...</option>
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label for="wordCount">字数要求</label>
+              <input type="number" id="wordCount" name="wordCount" 
+                     min="10" max="2000" value="200" required>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <h2>内容设置</h2>
+          
+          <div class="form-group">
+            <label for="content">主要内容描述 <span class="required">*</span></label>
+            <textarea id="content" name="content" rows="4" 
+                      placeholder="请简要描述您想要生成的文案内容..." required></textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="keywords">关键词（可选）</label>
+            <input type="text" id="keywords" name="keywords" 
+                   placeholder="多个关键词用逗号分隔，如：智能手表,健康,运动">
+          </div>
+
+          <div class="form-group">
+            <label for="additionalRequirements">其他要求（可选）</label>
+            <textarea id="additionalRequirements" name="additionalRequirements" 
+                      rows="2" placeholder="如有特殊要求请在此说明..."></textarea>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <h2>格式选项</h2>
+          
+          <div class="form-row checkbox-row">
+            <div class="checkbox-group">
+              <input type="checkbox" id="useParagraphs" name="useParagraphs" checked>
+              <label for="useParagraphs">自动分段</label>
+            </div>
+            
+            <div class="checkbox-group">
+              <input type="checkbox" id="useEmoji" name="useEmoji">
+              <label for="useEmoji">添加表情符号</label>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="count">生成版本数量</label>
+            <select id="count" name="count">
+              <option value="1">1 个版本</option>
+              <option value="2">2 个版本</option>
+              <option value="3" selected>3 个版本</option>
+              <option value="5">5 个版本</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" id="submitBtn" class="btn btn-primary">
+            <span class="btn-text">生成文案</span>
+            <span class="btn-loading" style="display: none;">
+              <span class="spinner"></span>
+              生成中...
+            </span>
+          </button>
+          <button type="reset" class="btn btn-secondary">重置</button>
+        </div>
+      </form>
+
+      <section id="results" class="results" style="display: none;">
+        <h2>生成结果</h2>
+        <div id="resultsContainer" class="results-container"></div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>Powered by DeepSeek AI</p>
+    </footer>
+  </div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>
