@@ -8,6 +8,13 @@ dist/
 build/
 *.tsbuildinfo
 
+# 前端编译产物
+public/js/*.js
+public/js/*.js.map
+
+# 数据目录（包含敏感信息）
+data/
+
 # 环境变量
 .env
 .env.local
