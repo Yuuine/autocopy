@@ -1,5 +1,6 @@
 import { ProviderConfigManager } from './providerConfig.js';
 import { toast, dialog } from './modal.js';
+import { AutoResizeTextarea } from './components/AutoResizeTextarea.js';
 
 interface PromptPreview {
   system: string;
@@ -27,6 +28,11 @@ export class AutoCopyApp {
   private customTones: CustomTone[] = [];
   private customToneModal: HTMLElement | null = null;
   private selectedCustomToneId: string | null = null;
+  private contentTextarea: AutoResizeTextarea | null = null;
+  private additionalRequirementsTextarea: AutoResizeTextarea | null = null;
+  private systemPromptEdit: AutoResizeTextarea | null = null;
+  private userPromptEdit: AutoResizeTextarea | null = null;
+  private customToneDescTextarea: AutoResizeTextarea | null = null;
 
   constructor() {
     this.form = document.getElementById('generateForm') as HTMLFormElement;
@@ -44,10 +50,43 @@ export class AutoCopyApp {
     this.bindEvents();
     this.initArticleTypeCustom();
     this.initKeywordsInput();
+    this.initAutoResizeTextareas();
     this.listenProviderConfigChanges();
     this.createPromptPreviewModal();
     this.createCustomToneModal();
     this.bindCustomToneEvents();
+  }
+
+  private initAutoResizeTextareas(): void {
+    const contentEl = document.getElementById('content') as HTMLTextAreaElement;
+    if (contentEl) {
+      this.contentTextarea = new AutoResizeTextarea({
+        id: 'content',
+        name: 'content',
+        placeholder: '描述您想要生成的文案内容...',
+        minRows: 3,
+        maxRows: 15,
+        maxHeight: '50vh',
+        initialHeight: '80px'
+      });
+      contentEl.parentNode?.insertBefore(this.contentTextarea.getElement(), contentEl);
+      contentEl.remove();
+    }
+
+    const additionalEl = document.getElementById('additionalRequirements') as HTMLTextAreaElement;
+    if (additionalEl) {
+      this.additionalRequirementsTextarea = new AutoResizeTextarea({
+        id: 'additionalRequirements',
+        name: 'additionalRequirements',
+        placeholder: '如有特殊要求请在此说明...',
+        minRows: 2,
+        maxRows: 10,
+        maxHeight: '30vh',
+        initialHeight: '60px'
+      });
+      additionalEl.parentNode?.insertBefore(this.additionalRequirementsTextarea.getElement(), additionalEl);
+      additionalEl.remove();
+    }
   }
 
   private createPromptPreviewModal(): void {
@@ -66,11 +105,11 @@ export class AutoCopyApp {
           <div class="prompt-preview-body">
             <div class="prompt-section">
               <label for="systemPromptEdit">系统提示词 (System Prompt)</label>
-              <textarea id="systemPromptEdit" rows="8" placeholder="系统提示词..."></textarea>
+              <div id="systemPromptEditWrapper"></div>
             </div>
             <div class="prompt-section">
               <label for="userPromptEdit">用户提示词 (User Prompt)</label>
-              <textarea id="userPromptEdit" rows="12" placeholder="用户提示词..."></textarea>
+              <div id="userPromptEditWrapper"></div>
             </div>
           </div>
           <div class="prompt-preview-footer">
@@ -88,6 +127,29 @@ export class AutoCopyApp {
     `;
     document.body.insertAdjacentHTML('beforeend', modalHTML);
     this.promptPreviewModal = document.getElementById('promptPreviewModal');
+    
+    this.systemPromptEdit = new AutoResizeTextarea({
+      id: 'systemPromptEdit',
+      placeholder: '系统提示词...',
+      minRows: 8,
+      maxRows: 20,
+      maxHeight: '40vh',
+      initialHeight: '180px'
+    });
+    const systemWrapper = this.promptPreviewModal?.querySelector('#systemPromptEditWrapper');
+    systemWrapper?.appendChild(this.systemPromptEdit.getElement());
+
+    this.userPromptEdit = new AutoResizeTextarea({
+      id: 'userPromptEdit',
+      placeholder: '用户提示词...',
+      minRows: 12,
+      maxRows: 30,
+      maxHeight: '50vh',
+      initialHeight: '260px'
+    });
+    const userWrapper = this.promptPreviewModal?.querySelector('#userPromptEditWrapper');
+    userWrapper?.appendChild(this.userPromptEdit.getElement());
+
     this.bindPromptPreviewEvents();
   }
 
@@ -164,7 +226,7 @@ export class AutoCopyApp {
             </div>
             <div class="form-group">
               <label for="customToneDescription">语气说明 <span class="required">*</span></label>
-              <textarea id="customToneDescription" rows="4" maxlength="500" placeholder="描述该语气风格的特点、适用场景和使用方式..."></textarea>
+              <div id="customToneDescriptionWrapper"></div>
               <small class="hint"><span id="descCharCount">0</span>/500 字</small>
             </div>
           </div>
@@ -183,6 +245,25 @@ export class AutoCopyApp {
     `;
     document.body.insertAdjacentHTML('beforeend', modalHTML);
     this.customToneModal = document.getElementById('customToneModal');
+    
+    this.customToneDescTextarea = new AutoResizeTextarea({
+      id: 'customToneDescription',
+      placeholder: '描述该语气风格的特点、适用场景和使用方式...',
+      maxLength: 500,
+      minRows: 4,
+      maxRows: 10,
+      maxHeight: '40vh',
+      initialHeight: '100px',
+      onChange: (value) => {
+        const descCharCount = this.customToneModal?.querySelector('#descCharCount');
+        if (descCharCount) {
+          descCharCount.textContent = value.length.toString();
+        }
+      }
+    });
+    const descWrapper = this.customToneModal?.querySelector('#customToneDescriptionWrapper');
+    descWrapper?.appendChild(this.customToneDescTextarea.getElement());
+    
     this.bindCustomToneModalEvents();
   }
 
@@ -192,8 +273,6 @@ export class AutoCopyApp {
     const closeBtn = this.customToneModal.querySelector('#closeCustomToneModal');
     const cancelBtn = this.customToneModal.querySelector('#cancelCustomTone');
     const saveBtn = this.customToneModal.querySelector('#saveCustomTone');
-    const descInput = this.customToneModal.querySelector('#customToneDescription') as HTMLTextAreaElement;
-    const descCharCount = this.customToneModal.querySelector('#descCharCount');
 
     closeBtn?.addEventListener('click', (e) => {
       e.preventDefault();
@@ -208,12 +287,6 @@ export class AutoCopyApp {
     saveBtn?.addEventListener('click', (e) => {
       e.preventDefault();
       this.saveCustomTone();
-    });
-
-    descInput?.addEventListener('input', () => {
-      if (descCharCount) {
-        descCharCount.textContent = descInput.value.length.toString();
-      }
     });
 
     this.customToneModal.addEventListener('click', (e) => {
@@ -235,20 +308,19 @@ export class AutoCopyApp {
     if (!this.customToneModal) return;
 
     const nameInput = this.customToneModal.querySelector('#customToneName') as HTMLInputElement;
-    const descInput = this.customToneModal.querySelector('#customToneDescription') as HTMLTextAreaElement;
     const descCharCount = this.customToneModal.querySelector('#descCharCount');
     const headerTitle = this.customToneModal.querySelector('.custom-tone-header h2');
 
     if (editTone) {
       this.selectedCustomToneId = editTone.id;
       if (nameInput) nameInput.value = editTone.name;
-      if (descInput) descInput.value = editTone.description;
+      if (this.customToneDescTextarea) this.customToneDescTextarea.setValue(editTone.description);
       if (descCharCount) descCharCount.textContent = editTone.description.length.toString();
       if (headerTitle) headerTitle.textContent = '编辑自定义语气';
     } else {
       this.selectedCustomToneId = null;
       if (nameInput) nameInput.value = '';
-      if (descInput) descInput.value = '';
+      if (this.customToneDescTextarea) this.customToneDescTextarea.clear();
       if (descCharCount) descCharCount.textContent = '0';
       if (headerTitle) headerTitle.textContent = '添加自定义语气';
     }
@@ -278,10 +350,9 @@ export class AutoCopyApp {
     if (!this.customToneModal) return;
 
     const nameInput = this.customToneModal.querySelector('#customToneName') as HTMLInputElement;
-    const descInput = this.customToneModal.querySelector('#customToneDescription') as HTMLTextAreaElement;
 
     const name = nameInput?.value.trim() || '';
-    const description = descInput?.value.trim() || '';
+    const description = this.customToneDescTextarea?.getValue().trim() || '';
 
     if (!name) {
       toast.warning('请输入语气名称');
@@ -297,13 +368,13 @@ export class AutoCopyApp {
 
     if (!description) {
       toast.warning('请输入语气说明');
-      descInput?.focus();
+      this.customToneDescTextarea?.focus();
       return;
     }
 
     if (description.length > 500) {
       toast.warning('语气说明不能超过500个汉字');
-      descInput?.focus();
+      this.customToneDescTextarea?.focus();
       return;
     }
 
@@ -625,10 +696,10 @@ export class AutoCopyApp {
       useParagraphs: formData.has('useParagraphs'),
       useEmoji: formData.has('useEmoji'),
       useHashtag: formData.has('useHashtag'),
-      content: formData.get('content'),
+      content: this.contentTextarea?.getValue() || formData.get('content'),
       wordCount: parseInt(formData.get('wordCount') as string, 10),
       keywords: this.keywords.length > 0 ? this.keywords : undefined,
-      additionalRequirements: formData.get('additionalRequirements') || undefined,
+      additionalRequirements: this.additionalRequirementsTextarea?.getValue() || formData.get('additionalRequirements') || undefined,
       count: count,
       provider: provider,
     };
@@ -661,11 +732,8 @@ export class AutoCopyApp {
       if (result.success) {
         this.currentPromptPreview = result.prompts;
         
-        const systemPromptEdit = this.promptPreviewModal?.querySelector('#systemPromptEdit') as HTMLTextAreaElement;
-        const userPromptEdit = this.promptPreviewModal?.querySelector('#userPromptEdit') as HTMLTextAreaElement;
-        
-        if (systemPromptEdit) systemPromptEdit.value = result.prompts.system;
-        if (userPromptEdit) userPromptEdit.value = result.prompts.user;
+        if (this.systemPromptEdit) this.systemPromptEdit.setValue(result.prompts.system);
+        if (this.userPromptEdit) this.userPromptEdit.setValue(result.prompts.user);
         
         this.openPromptPreviewModal();
       } else {
@@ -682,11 +750,8 @@ export class AutoCopyApp {
   private async sendEditedPrompt(): Promise<void> {
     if (!this.currentFormData) return;
 
-    const systemPromptEdit = this.promptPreviewModal?.querySelector('#systemPromptEdit') as HTMLTextAreaElement;
-    const userPromptEdit = this.promptPreviewModal?.querySelector('#userPromptEdit') as HTMLTextAreaElement;
-
-    const systemPrompt = systemPromptEdit?.value || '';
-    const userPrompt = userPromptEdit?.value || '';
+    const systemPrompt = this.systemPromptEdit?.getValue() || '';
+    const userPrompt = this.userPromptEdit?.getValue() || '';
 
     if (!systemPrompt || !userPrompt) {
       toast.warning('提示词不能为空');

@@ -1,5 +1,6 @@
 import { Modal } from './Modal.js';
 import { toast } from './Toast.js';
+import { AutoResizeTextarea } from './AutoResizeTextarea.js';
 
 export interface CustomTone {
   id: string;
@@ -20,7 +21,7 @@ export class CustomToneModal {
   private onSave?: (tone: CustomTone) => void;
   private onDelete?: (toneId: string) => void;
   private nameInput: HTMLInputElement | null = null;
-  private descInput: HTMLTextAreaElement | null = null;
+  private descTextarea: AutoResizeTextarea | null = null;
 
   constructor(options: CustomToneModalOptions = {}) {
     this.onSave = options.onSave;
@@ -47,20 +48,32 @@ export class CustomToneModal {
       </div>
       <div class="form-group">
         <label for="customToneDescription">语气说明 <span class="required">*</span></label>
-        <textarea id="customToneDescription" rows="4" maxlength="500" placeholder="描述该语气风格的特点、适用场景和使用方式..."></textarea>
+        <div id="customToneDescriptionWrapper"></div>
         <small class="hint"><span id="descCharCount">0</span>/500 字</small>
       </div>
     `;
     
     this.nameInput = container.querySelector('#customToneName');
-    this.descInput = container.querySelector('#customToneDescription');
     
-    const descCharCount = container.querySelector('#descCharCount');
-    this.descInput?.addEventListener('input', () => {
-      if (descCharCount && this.descInput) {
-        descCharCount.textContent = this.descInput.value.length.toString();
-      }
-    });
+    const wrapper = container.querySelector('#customToneDescriptionWrapper');
+    if (wrapper) {
+      this.descTextarea = new AutoResizeTextarea({
+        id: 'customToneDescription',
+        placeholder: '描述该语气风格的特点、适用场景和使用方式...',
+        maxLength: 500,
+        minRows: 4,
+        maxRows: 10,
+        maxHeight: '40vh',
+        initialHeight: '100px',
+        onChange: (value) => {
+          const descCharCount = container.querySelector('#descCharCount');
+          if (descCharCount) {
+            descCharCount.textContent = value.length.toString();
+          }
+        }
+      });
+      wrapper.appendChild(this.descTextarea.getElement());
+    }
     
     return container;
   }
@@ -91,7 +104,7 @@ export class CustomToneModal {
     if (tone) {
       this.selectedToneId = tone.id;
       if (this.nameInput) this.nameInput.value = tone.name;
-      if (this.descInput) this.descInput.value = tone.description;
+      if (this.descTextarea) this.descTextarea.setValue(tone.description);
       
       const descCharCount = this.modal.getElement()?.querySelector('#descCharCount');
       if (descCharCount) descCharCount.textContent = tone.description.length.toString();
@@ -101,7 +114,7 @@ export class CustomToneModal {
     } else {
       this.selectedToneId = null;
       if (this.nameInput) this.nameInput.value = '';
-      if (this.descInput) this.descInput.value = '';
+      if (this.descTextarea) this.descTextarea.clear();
       
       const descCharCount = this.modal.getElement()?.querySelector('#descCharCount');
       if (descCharCount) descCharCount.textContent = '0';
@@ -132,7 +145,7 @@ export class CustomToneModal {
 
   private async save(): Promise<void> {
     const name = this.nameInput?.value.trim() || '';
-    const description = this.descInput?.value.trim() || '';
+    const description = this.descTextarea?.getValue().trim() || '';
 
     if (!name) {
       toast.warning('请输入语气名称');
@@ -148,13 +161,13 @@ export class CustomToneModal {
 
     if (!description) {
       toast.warning('请输入语气说明');
-      this.descInput?.focus();
+      this.descTextarea?.focus();
       return;
     }
 
     if (description.length > 500) {
       toast.warning('语气说明不能超过500个汉字');
-      this.descInput?.focus();
+      this.descTextarea?.focus();
       return;
     }
 

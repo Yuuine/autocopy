@@ -1,3 +1,5 @@
+import { AutoResizeTextarea, AutoResizeTextareaOptions } from './AutoResizeTextarea.js';
+
 export interface FormFieldOptions {
   id: string;
   label: string;
@@ -13,21 +15,46 @@ export interface FormFieldOptions {
   min?: number;
   max?: number;
   maxLength?: number;
+  autoResize?: boolean | Omit<AutoResizeTextareaOptions, 'id' | 'name' | 'value'>;
   onChange?: (value: string) => void;
 }
 
 export class FormField {
   private container: HTMLElement;
-  private input: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+  private input!: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+  private autoResizeInstance: AutoResizeTextarea | null = null;
 
   constructor(options: FormFieldOptions) {
     this.container = this.create(options);
-    this.input = this.container.querySelector('input, textarea, select') as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
     
-    if (options.onChange) {
-      this.input.addEventListener('input', () => {
-        options.onChange!(this.input.value);
-      });
+    if (options.type === 'textarea' && options.autoResize) {
+      const textarea = this.container.querySelector('textarea');
+      if (textarea) {
+        this.autoResizeInstance = new AutoResizeTextarea({
+          id: options.id,
+          name: options.name || options.id,
+          placeholder: options.placeholder,
+          value: options.value || '',
+          disabled: options.disabled,
+          required: options.required,
+          maxLength: options.maxLength,
+          minRows: options.rows || 1,
+          ...(typeof options.autoResize === 'object' ? options.autoResize : {}),
+          onChange: options.onChange
+        });
+        
+        textarea.parentNode?.insertBefore(this.autoResizeInstance.getElement(), textarea);
+        textarea.remove();
+        this.input = this.autoResizeInstance.getTextarea();
+      }
+    } else {
+      this.input = this.container.querySelector('input, textarea, select') as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+      
+      if (options.onChange) {
+        this.input.addEventListener('input', () => {
+          options.onChange!(this.input.value);
+        });
+      }
     }
   }
 
@@ -96,10 +123,16 @@ export class FormField {
 
   setValue(value: string): void {
     this.input.value = value;
+    if (this.autoResizeInstance) {
+      this.autoResizeInstance.setValue(value);
+    }
   }
 
   clear(): void {
     this.input.value = '';
+    if (this.autoResizeInstance) {
+      this.autoResizeInstance.clear();
+    }
   }
 
   focus(): void {
@@ -108,10 +141,16 @@ export class FormField {
 
   disable(): void {
     this.input.disabled = true;
+    if (this.autoResizeInstance) {
+      this.autoResizeInstance.disable();
+    }
   }
 
   enable(): void {
     this.input.disabled = false;
+    if (this.autoResizeInstance) {
+      this.autoResizeInstance.enable();
+    }
   }
 
   getElement(): HTMLElement {
@@ -120,6 +159,10 @@ export class FormField {
 
   getInput(): HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement {
     return this.input;
+  }
+
+  getAutoResizeInstance(): AutoResizeTextarea | null {
+    return this.autoResizeInstance;
   }
 }
 

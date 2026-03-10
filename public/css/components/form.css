@@ -60,8 +60,58 @@
 }
 
 .form-group textarea {
-  resize: vertical;
+  resize: none;
   min-height: 80px;
+  overflow-y: hidden;
+}
+
+.auto-resize-textarea-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.auto-resize-textarea {
+  width: 100%;
+  padding: 10px var(--spacing-xl);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-md);
+  font-family: inherit;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  resize: none;
+  overflow-y: hidden;
+  transition: height 0.2s ease-out, border-color var(--transition-smooth), box-shadow var(--transition-smooth);
+}
+
+.auto-resize-textarea:focus {
+  outline: none;
+  border-color: var(--color-border-focus);
+  box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.15);
+}
+
+.auto-resize-textarea::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.auto-resize-textarea-wrapper.focused .auto-resize-textarea {
+  border-color: var(--color-border-focus);
+  box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.15);
+}
+
+.auto-resize-textarea-wrapper.disabled .auto-resize-textarea {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: var(--color-bg-tertiary);
+}
+
+.auto-resize-textarea-shadow {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .form-group input[type="number"] {

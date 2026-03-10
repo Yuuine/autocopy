@@ -5,3 +5,4 @@ export { Button, ButtonOptions } from './Button.js';
 export { FormField, FormFieldOptions } from './FormField.js';
 export { ProviderConfigPanel, ProviderInfo, ProviderConfigOptions } from './ProviderConfigPanel.js';
 export { CustomToneModal, CustomTone } from './CustomToneModal.js';
+export { AutoResizeTextarea, AutoResizeTextareaOptions, createAutoResizeTextarea } from './AutoResizeTextarea.js';
