@@ -1,5 +1,5 @@
 import { ProviderConfigManager } from './providerConfig.js';
-import { modal } from './modal.js';
+import { toast, dialog } from './modal.js';
 
 interface PromptPreview {
   system: string;
@@ -284,25 +284,25 @@ export class AutoCopyApp {
     const description = descInput?.value.trim() || '';
 
     if (!name) {
-      await modal.warning('请输入语气名称');
+      toast.warning('请输入语气名称');
       nameInput?.focus();
       return;
     }
 
     if (name.length > 8) {
-      await modal.warning('语气名称不能超过8个汉字');
+      toast.warning('语气名称不能超过8个汉字');
       nameInput?.focus();
       return;
     }
 
     if (!description) {
-      await modal.warning('请输入语气说明');
+      toast.warning('请输入语气说明');
       descInput?.focus();
       return;
     }
 
     if (description.length > 500) {
-      await modal.warning('语气说明不能超过500个汉字');
+      toast.warning('语气说明不能超过500个汉字');
       descInput?.focus();
       return;
     }
@@ -328,13 +328,13 @@ export class AutoCopyApp {
       if (result.success) {
         await this.loadCustomTones();
         this.closeCustomToneModal();
-        await modal.success(this.selectedCustomToneId ? '语气风格已更新' : '语气风格已添加');
+        toast.success(this.selectedCustomToneId ? '语气风格已更新' : '语气风格已添加');
       } else {
-        await modal.error(result.error || '保存失败');
+        toast.error(result.error || '保存失败');
       }
     } catch (error) {
       console.error('Error saving custom tone:', error);
-      await modal.error('网络错误，请检查服务器是否正常运行');
+      toast.error('网络错误，请检查服务器是否正常运行');
     } finally {
       this.setCustomToneLoading(false);
     }
@@ -403,25 +403,25 @@ export class AutoCopyApp {
   }
 
   private async deleteCustomTone(toneId: string): Promise<void> {
-    const confirmed = await modal.confirm('确定要删除这个自定义语气吗？');
-    if (!confirmed) return;
+    const result = await dialog.confirm('确定要删除这个自定义语气吗？');
+    if (!result.confirmed) return;
 
     try {
       const response = await fetch(`/api/copywriting/custom-tones/${toneId}`, {
         method: 'DELETE',
       });
 
-      const result = await response.json();
+      const res = await response.json();
 
-      if (result.success) {
+      if (res.success) {
         await this.loadCustomTones();
-        await modal.success('语气风格已删除');
+        toast.success('语气风格已删除');
       } else {
-        await modal.error(result.error || '删除失败');
+        toast.error(res.error || '删除失败');
       }
     } catch (error) {
       console.error('Error deleting custom tone:', error);
-      await modal.error('网络错误，请检查服务器是否正常运行');
+      toast.error('网络错误，请检查服务器是否正常运行');
     }
   }
 
@@ -459,7 +459,7 @@ export class AutoCopyApp {
     }
     
     select.disabled = false;
-    select.innerHTML = '<option value="">选择模型</option>';
+    select.innerHTML = '<option value="">请先选择模型</option>';
     
     configuredProviders.forEach((provider: any) => {
       const option = document.createElement('option');
@@ -599,6 +599,14 @@ export class AutoCopyApp {
     const articleTypeSelect = document.getElementById('articleType') as HTMLSelectElement;
     const articleTypeCustom = document.getElementById('articleTypeCustom') as HTMLInputElement;
     const toneSelect = document.getElementById('tone') as HTMLSelectElement;
+    const providerSelect = document.getElementById('provider') as HTMLSelectElement;
+    
+    const provider = formData.get('provider') as string;
+    if (!provider) {
+      toast.warning('请先选择模型');
+      providerSelect?.focus();
+      return;
+    }
     
     const articleType = articleTypeSelect.value === 'custom' 
       ? articleTypeCustom.value 
@@ -622,7 +630,7 @@ export class AutoCopyApp {
       keywords: this.keywords.length > 0 ? this.keywords : undefined,
       additionalRequirements: formData.get('additionalRequirements') || undefined,
       count: count,
-      provider: formData.get('provider') || undefined,
+      provider: provider,
     };
 
     const previewPrompt = formData.has('previewPrompt');
@@ -661,11 +669,11 @@ export class AutoCopyApp {
         
         this.openPromptPreviewModal();
       } else {
-        await modal.error(result.error || '预览生成失败');
+        toast.error(result.error || '预览生成失败');
       }
     } catch (error) {
       console.error('Error:', error);
-      await modal.error('网络错误，请检查服务器是否正常运行');
+      toast.error('网络错误，请检查服务器是否正常运行');
     } finally {
       this.setLoading(false);
     }
@@ -681,7 +689,7 @@ export class AutoCopyApp {
     const userPrompt = userPromptEdit?.value || '';
 
     if (!systemPrompt || !userPrompt) {
-      await modal.warning('提示词不能为空');
+      toast.warning('提示词不能为空');
       return;
     }
 
@@ -708,11 +716,11 @@ export class AutoCopyApp {
         this.closePromptPreviewModal();
         this.showResults(result.results, result.provider);
       } else {
-        await modal.error(result.error || '生成失败，请稍后重试');
+        toast.error(result.error || '生成失败，请稍后重试');
       }
     } catch (error) {
       console.error('Error:', error);
-      await modal.error('网络错误，请检查服务器是否正常运行');
+      toast.error('网络错误，请检查服务器是否正常运行');
     } finally {
       this.setPromptPreviewLoading(false);
     }

@@ -1,0 +1,98 @@
+:root {
+  --color-primary: #0071e3;
+  --color-primary-hover: #0077ed;
+  --color-success: #34c759;
+  --color-error: #ff3b30;
+  --color-warning: #f59e0b;
+  --color-info: #6b7280;
+
+  --color-text-primary: #1d1d1f;
+  --color-text-secondary: #86868b;
+  --color-text-tertiary: #6e6e73;
+  --color-text-dark: #1f2937;
+  --color-text-gray: #374151;
+  --color-text-light-gray: #4b5563;
+  --color-text-muted: #9ca3af;
+
+  --color-bg-primary: #fbfbfd;
+  --color-bg-secondary: #ffffff;
+  --color-bg-tertiary: #f5f5f7;
+  --color-bg-light: #fafafa;
+  --color-bg-gray: #f3f4f6;
+  --color-bg-border: #e5e7eb;
+
+  --color-border: #d2d2d7;
+  --color-border-focus: #0071e3;
+  --color-border-light: #e5e7eb;
+
+  --color-toast-info: #6b7280;
+  --color-toast-success: #10b981;
+  --color-toast-warning: #f59e0b;
+  --color-toast-error: #ef4444;
+
+  --color-dialog-bg: #ffffff;
+  --color-dialog-header-bg: #fafafa;
+  --color-dialog-btn-confirm: #374151;
+  --color-dialog-btn-confirm-hover: #1f2937;
+  --color-dialog-btn-cancel: #f3f4f6;
+  --color-dialog-btn-cancel-hover: #e5e7eb;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.12);
+  --shadow-toast: 0 4px 20px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-dialog: 0 20px 50px rgba(0, 0, 0, 0.15), 0 8px 20px rgba(0, 0, 0, 0.1);
+
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 14px;
+  --radius-full: 50%;
+
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.2s ease;
+  --transition-smooth: 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
+  --transition-toast: 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+  --transition-dialog: 0.25s cubic-bezier(0.25, 0.1, 0.25, 1);
+
+  --font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif;
+  --font-family-mono: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.8125rem;
+  --font-size-base: 0.875rem;
+  --font-size-md: 0.9375rem;
+  --font-size-lg: 1rem;
+  --font-size-xl: 1.125rem;
+  --font-size-2xl: 1.5rem;
+
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+
+  --line-height-tight: 1.4;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.6;
+  --line-height-loose: 1.7;
+
+  --spacing-xs: 4px;
+  --spacing-sm: 6px;
+  --spacing-md: 8px;
+  --spacing-lg: 12px;
+  --spacing-xl: 16px;
+  --spacing-2xl: 20px;
+  --spacing-3xl: 24px;
+  --spacing-4xl: 28px;
+
+  --z-index-modal: 1500;
+  --z-index-prompt-preview: 1600;
+  --z-index-custom-tone: 1700;
+  --z-index-dialog: 2500;
+  --z-index-toast: 3000;
+
+  --container-max-width: 800px;
+  --modal-max-width-sm: 400px;
+  --modal-max-width-md: 480px;
+  --modal-max-width-lg: 640px;
+  --modal-max-width-xl: 720px;
+}

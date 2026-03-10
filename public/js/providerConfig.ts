@@ -1,4 +1,4 @@
-import { modal } from './modal.js';
+import { toast, dialog } from './modal.js';
 
 export interface ProviderInfo {
   id: string;
@@ -181,7 +181,6 @@ export class ProviderConfigManager {
           <h4>${provider.name}</h4>
           <p>${provider.description}</p>
           <div class="provider-meta">
-            <span class="model-tag">默认: ${provider.defaultModel}</span>
             ${provider.configured ? '<span class="status-badge configured">已配置</span>' : '<span class="status-badge">未配置</span>'}
             ${this.defaultProvider === provider.id ? '<span class="default-badge">默认</span>' : ''}
           </div>
@@ -300,17 +299,17 @@ export class ProviderConfigManager {
       const result = await response.json();
 
       if (response.ok) {
-        await modal.success(result.message);
+        toast.success(result.message);
         await this.loadProviders();
         this.renderProviderList();
         this.hideForm();
         this.emitConfigChanged();
       } else {
-        await modal.error(result.message || '保存失败');
+        toast.error(result.message || '保存失败');
       }
     } catch (error) {
       console.error('Error saving config:', error);
-      await modal.error('保存配置时发生错误');
+      toast.error('保存配置时发生错误');
     }
   }
 
@@ -321,7 +320,7 @@ export class ProviderConfigManager {
     const baseUrl = (this.configModal?.querySelector('#baseUrl') as HTMLInputElement).value;
 
     if (!apiKey) {
-      await modal.warning('请输入 API 密钥');
+      toast.warning('请输入 API 密钥');
       return;
     }
 
@@ -340,13 +339,13 @@ export class ProviderConfigManager {
 
       const result = await response.json();
       if (result.success) {
-        await modal.success(result.message);
+        toast.success(result.message);
       } else {
-        await modal.error(result.message);
+        toast.error(result.message);
       }
     } catch (error) {
       console.error('Error validating:', error);
-      await modal.error('验证失败');
+      toast.error('验证失败');
     } finally {
       if (validateBtn) {
         validateBtn.disabled = false;
@@ -367,38 +366,38 @@ export class ProviderConfigManager {
         this.defaultProvider = providerId;
         this.renderProviderList();
         this.emitConfigChanged();
-        await modal.success(result.message);
+        toast.success(result.message);
       } else {
-        await modal.error(result.message || '设置失败');
+        toast.error(result.message || '设置失败');
       }
     } catch (error) {
       console.error('Error setting default:', error);
-      await modal.error('设置默认模型时发生错误');
+      toast.error('设置默认模型时发生错误');
     }
   }
 
   private async removeProvider(providerId: string): Promise<void> {
-    const result = await modal.confirm('确定要删除此模型配置吗？', '确认删除');
-    if (!result.confirmed) return;
+    const res = await dialog.confirm('确定要删除此模型配置吗？', '确认删除');
+    if (!res.confirmed) return;
 
     try {
       const response = await fetch(`/api/providers/${providerId}`, {
         method: 'DELETE',
       });
 
-      const res = await response.json();
+      const data = await response.json();
 
       if (response.ok) {
         await this.loadProviders();
         this.renderProviderList();
         this.emitConfigChanged();
-        await modal.success(res.message);
+        toast.success(data.message);
       } else {
-        await modal.error(res.message || '删除失败');
+        toast.error(data.message || '删除失败');
       }
     } catch (error) {
       console.error('Error removing provider:', error);
-      await modal.error('删除配置时发生错误');
+      toast.error('删除配置时发生错误');
     }
   }
 

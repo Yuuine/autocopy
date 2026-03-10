@@ -1,0 +1,27 @@
+.results {
+  margin-top: 32px;
+  padding-top: var(--spacing-3xl);
+  border-top: 1px solid var(--color-border);
+}
+
+.results h2 {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--spacing-xl);
+  color: var(--color-text-primary);
+}
+
+.results-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xl);
+}
+
+.error-message {
+  background: rgba(255, 59, 48, 0.1);
+  border: 1px solid rgba(255, 59, 48, 0.2);
+  color: var(--color-error);
+  padding: var(--spacing-xl) var(--spacing-2xl);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-base);
+}

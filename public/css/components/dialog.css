@@ -1,0 +1,204 @@
+#dialog-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: var(--z-index-dialog);
+}
+
+#dialog-container > * {
+  pointer-events: auto;
+}
+
+.dialog-wrapper {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: var(--spacing-2xl);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--transition-dialog), visibility var(--transition-dialog);
+}
+
+.dialog-wrapper.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.dialog-wrapper.closing {
+  opacity: 0;
+}
+
+.dialog-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+.dialog-box {
+  position: relative;
+  background: var(--color-dialog-bg);
+  border-radius: 14px;
+  width: 100%;
+  max-width: var(--modal-max-width-sm);
+  box-shadow: var(--shadow-dialog);
+  transform: scale(0.92) translateY(-15px);
+  transition: transform var(--transition-dialog);
+  overflow: hidden;
+}
+
+.dialog-wrapper.visible .dialog-box {
+  transform: scale(1) translateY(0);
+}
+
+.dialog-wrapper.closing .dialog-box {
+  transform: scale(0.92) translateY(-15px);
+}
+
+.dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px var(--spacing-2xl);
+  border-bottom: 1px solid var(--color-border-light);
+  background: var(--color-dialog-header-bg);
+}
+
+.dialog-title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-dark);
+  margin: 0;
+}
+
+.dialog-close-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-normal);
+  padding: 0;
+}
+
+.dialog-close-btn:hover {
+  background: var(--color-bg-gray);
+  color: var(--color-text-light-gray);
+}
+
+.dialog-close-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.dialog-body {
+  padding: var(--spacing-4xl) var(--spacing-2xl);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.dialog-icon {
+  width: 44px;
+  height: 44px;
+  margin-bottom: var(--spacing-xl);
+}
+
+.dialog-icon.info {
+  color: var(--color-toast-info);
+}
+
+.dialog-icon.success {
+  color: var(--color-toast-success);
+}
+
+.dialog-icon.warning {
+  color: var(--color-toast-warning);
+}
+
+.dialog-icon.error {
+  color: var(--color-toast-error);
+}
+
+.dialog-icon.question {
+  color: var(--color-toast-info);
+}
+
+.dialog-message {
+  font-size: var(--font-size-md);
+  color: var(--color-text-gray);
+  line-height: var(--line-height-relaxed);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  max-width: 100%;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: center;
+  gap: var(--spacing-xl);
+  padding: 0 var(--spacing-2xl) var(--spacing-2xl);
+}
+
+.dialog-btn {
+  min-width: 90px;
+  padding: 11px var(--spacing-3xl);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  font-family: inherit;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+}
+
+.dialog-btn-confirm {
+  background: var(--color-dialog-btn-confirm);
+  color: white;
+}
+
+.dialog-btn-confirm:hover {
+  background: var(--color-dialog-btn-confirm-hover);
+  transform: translateY(-1px);
+}
+
+.dialog-btn-cancel {
+  background: var(--color-dialog-btn-cancel);
+  color: var(--color-text-light-gray);
+}
+
+.dialog-btn-cancel:hover {
+  background: var(--color-dialog-btn-cancel-hover);
+}
+
+@media (max-width: 480px) {
+  .dialog-box {
+    max-width: calc(100% - 32px);
+  }
+  
+  .dialog-footer {
+    flex-direction: column-reverse;
+  }
+  
+  .dialog-btn {
+    width: 100%;
+  }
+}

@@ -9,8 +9,8 @@ build/
 *.tsbuildinfo
 
 # 前端编译产物
-public/js/*.js
-public/js/*.js.map
+public/js/**/*.js
+public/js/**/*.js.map
 
 # 数据目录（包含敏感信息）
 data/
@@ -36,6 +36,9 @@ lerna-debug.log*
 *.swo
 *~
 .DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
 
 # 测试覆盖率
 coverage/
@@ -59,3 +62,23 @@ coverage/
 
 # TypeScript 项目常见忽略
 tsconfig.tsbuildinfo
+
+# 操作系统文件
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+
+# 打包文件
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# 备份文件
+*.bak
+*.backup
+*.old
+
+# 调试文件
+*.cpuprofile
+*.heapsnapshot
