@@ -37,6 +37,19 @@
   --color-dialog-btn-cancel: #f3f4f6;
   --color-dialog-btn-cancel-hover: #e5e7eb;
 
+  --primary: var(--color-primary);
+  --primary-hover: var(--color-primary-hover);
+  --text-primary: var(--color-text-primary);
+  --text-secondary: var(--color-text-secondary);
+  --text-tertiary: var(--color-text-tertiary);
+  --bg-primary: var(--color-bg-primary);
+  --bg-secondary: var(--color-bg-secondary);
+  --bg-tertiary: var(--color-bg-tertiary);
+  --border: var(--color-border);
+  --border-focus: var(--color-border-focus);
+  --success: var(--color-success);
+  --error: var(--color-error);
+
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
   --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.12);
@@ -48,12 +61,14 @@
   --radius-lg: 12px;
   --radius-xl: 14px;
   --radius-full: 50%;
+  --radius: var(--radius-lg);
 
   --transition-fast: 0.15s ease;
   --transition-normal: 0.2s ease;
   --transition-smooth: 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
   --transition-toast: 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
   --transition-dialog: 0.25s cubic-bezier(0.25, 0.1, 0.25, 1);
+  --transition: var(--transition-smooth);
 
   --font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif;
   --font-family-mono: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
