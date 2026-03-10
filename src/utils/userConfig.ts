@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import type { AIProvider } from '../types';
+import type { CustomTone } from '../types/copywriting';
 import { encrypt, decrypt, hashApiKey } from './encryption';
 
 export interface UserProviderConfig {
@@ -17,6 +18,7 @@ export interface UserProviderConfig {
 export interface UserConfig {
   defaultProvider: AIProvider;
   providers: Record<AIProvider, UserProviderConfig>;
+  customTones: CustomTone[];
 }
 
 const CONFIG_DIR = path.join(process.cwd(), 'data');
@@ -32,6 +34,7 @@ function getEmptyConfig(): UserConfig {
   return {
     defaultProvider: '' as AIProvider,
     providers: {} as Record<AIProvider, UserProviderConfig>,
+    customTones: [],
   };
 }
 
@@ -308,4 +311,89 @@ export function getAllProviderSummaries(): Array<{
     
     return result;
   });
+}
+
+export function getCustomTones(): CustomTone[] {
+  const config = loadUserConfig();
+  return config.customTones || [];
+}
+
+export function addCustomTone(name: string, description: string): CustomTone {
+  const config = loadUserConfig();
+  
+  const newTone: CustomTone = {
+    id: `custom_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+    name,
+    description,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+  
+  if (!config.customTones) {
+    config.customTones = [];
+  }
+  
+  config.customTones.push(newTone);
+  saveUserConfig(config);
+  
+  return newTone;
+}
+
+export function updateCustomTone(id: string, name: string, description: string): CustomTone | null {
+  const config = loadUserConfig();
+  
+  if (!config.customTones) {
+    return null;
+  }
+  
+  const toneIndex = config.customTones.findIndex(t => t.id === id);
+  if (toneIndex === -1) {
+    return null;
+  }
+  
+  const existingTone = config.customTones[toneIndex];
+  if (!existingTone) {
+    return null;
+  }
+  
+  const updatedTone: CustomTone = {
+    id: existingTone.id,
+    name,
+    description,
+    createdAt: existingTone.createdAt,
+    updatedAt: new Date(),
+  };
+  
+  config.customTones[toneIndex] = updatedTone;
+  
+  saveUserConfig(config);
+  return updatedTone;
+}
+
+export function deleteCustomTone(id: string): boolean {
+  const config = loadUserConfig();
+  
+  if (!config.customTones) {
+    return false;
+  }
+  
+  const initialLength = config.customTones.length;
+  config.customTones = config.customTones.filter(t => t.id !== id);
+  
+  if (config.customTones.length === initialLength) {
+    return false;
+  }
+  
+  saveUserConfig(config);
+  return true;
+}
+
+export function getCustomToneById(id: string): CustomTone | null {
+  const config = loadUserConfig();
+  
+  if (!config.customTones) {
+    return null;
+  }
+  
+  return config.customTones.find(t => t.id === id) || null;
 }

@@ -6,6 +6,14 @@ interface PromptPreview {
   user: string;
 }
 
+interface CustomTone {
+  id: string;
+  name: string;
+  description: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export class AutoCopyApp {
   private form: HTMLFormElement;
   private resultsSection: HTMLElement;
@@ -16,6 +24,9 @@ export class AutoCopyApp {
   private promptPreviewModal: HTMLElement | null = null;
   private currentPromptPreview: PromptPreview | null = null;
   private currentFormData: any = null;
+  private customTones: CustomTone[] = [];
+  private customToneModal: HTMLElement | null = null;
+  private selectedCustomToneId: string | null = null;
 
   constructor() {
     this.form = document.getElementById('generateForm') as HTMLFormElement;
@@ -29,11 +40,14 @@ export class AutoCopyApp {
 
   private async init(): Promise<void> {
     await this.loadProviders();
+    await this.loadCustomTones();
     this.bindEvents();
     this.initArticleTypeCustom();
     this.initKeywordsInput();
     this.listenProviderConfigChanges();
     this.createPromptPreviewModal();
+    this.createCustomToneModal();
+    this.bindCustomToneEvents();
   }
 
   private createPromptPreviewModal(): void {
@@ -127,6 +141,288 @@ export class AutoCopyApp {
     sendBtn.disabled = loading;
     btnText.style.display = loading ? 'none' : 'inline';
     btnLoading.style.display = loading ? 'inline-flex' : 'none';
+  }
+
+  private createCustomToneModal(): void {
+    const modalHTML = `
+      <div id="customToneModal" class="custom-tone-modal">
+        <div class="custom-tone-content">
+          <div class="custom-tone-header">
+            <h2>添加自定义语气</h2>
+            <button class="custom-tone-close" id="closeCustomToneModal" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 6L6 18"/>
+                <path d="M6 6l12 12"/>
+              </svg>
+            </button>
+          </div>
+          <div class="custom-tone-body">
+            <div class="form-group">
+              <label for="customToneName">语气名称 <span class="required">*</span></label>
+              <input type="text" id="customToneName" maxlength="8" placeholder="最多8个汉字" />
+              <small class="hint">最多8个汉字</small>
+            </div>
+            <div class="form-group">
+              <label for="customToneDescription">语气说明 <span class="required">*</span></label>
+              <textarea id="customToneDescription" rows="4" maxlength="500" placeholder="描述该语气风格的特点、适用场景和使用方式..."></textarea>
+              <small class="hint"><span id="descCharCount">0</span>/500 字</small>
+            </div>
+          </div>
+          <div class="custom-tone-footer">
+            <button type="button" class="btn btn-secondary" id="cancelCustomTone">取消</button>
+            <button type="button" class="btn btn-primary" id="saveCustomTone">
+              <span class="btn-text">保存</span>
+              <span class="btn-loading">
+                <span class="spinner"></span>
+                保存中
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    this.customToneModal = document.getElementById('customToneModal');
+    this.bindCustomToneModalEvents();
+  }
+
+  private bindCustomToneModalEvents(): void {
+    if (!this.customToneModal) return;
+
+    const closeBtn = this.customToneModal.querySelector('#closeCustomToneModal');
+    const cancelBtn = this.customToneModal.querySelector('#cancelCustomTone');
+    const saveBtn = this.customToneModal.querySelector('#saveCustomTone');
+    const descInput = this.customToneModal.querySelector('#customToneDescription') as HTMLTextAreaElement;
+    const descCharCount = this.customToneModal.querySelector('#descCharCount');
+
+    closeBtn?.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.closeCustomToneModal();
+    });
+
+    cancelBtn?.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.closeCustomToneModal();
+    });
+
+    saveBtn?.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.saveCustomTone();
+    });
+
+    descInput?.addEventListener('input', () => {
+      if (descCharCount) {
+        descCharCount.textContent = descInput.value.length.toString();
+      }
+    });
+
+    this.customToneModal.addEventListener('click', (e) => {
+      if (e.target === this.customToneModal) {
+        this.closeCustomToneModal();
+      }
+    });
+  }
+
+  private bindCustomToneEvents(): void {
+    const addBtn = document.getElementById('addCustomToneBtn');
+    addBtn?.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.openCustomToneModal();
+    });
+  }
+
+  private openCustomToneModal(editTone?: CustomTone): void {
+    if (!this.customToneModal) return;
+
+    const nameInput = this.customToneModal.querySelector('#customToneName') as HTMLInputElement;
+    const descInput = this.customToneModal.querySelector('#customToneDescription') as HTMLTextAreaElement;
+    const descCharCount = this.customToneModal.querySelector('#descCharCount');
+    const headerTitle = this.customToneModal.querySelector('.custom-tone-header h2');
+
+    if (editTone) {
+      this.selectedCustomToneId = editTone.id;
+      if (nameInput) nameInput.value = editTone.name;
+      if (descInput) descInput.value = editTone.description;
+      if (descCharCount) descCharCount.textContent = editTone.description.length.toString();
+      if (headerTitle) headerTitle.textContent = '编辑自定义语气';
+    } else {
+      this.selectedCustomToneId = null;
+      if (nameInput) nameInput.value = '';
+      if (descInput) descInput.value = '';
+      if (descCharCount) descCharCount.textContent = '0';
+      if (headerTitle) headerTitle.textContent = '添加自定义语气';
+    }
+
+    this.customToneModal.classList.add('visible');
+  }
+
+  private closeCustomToneModal(): void {
+    if (!this.customToneModal) return;
+    this.customToneModal.classList.remove('visible');
+    this.setCustomToneLoading(false);
+  }
+
+  private setCustomToneLoading(loading: boolean): void {
+    const saveBtn = this.customToneModal?.querySelector('#saveCustomTone') as HTMLButtonElement;
+    if (!saveBtn) return;
+
+    const btnText = saveBtn.querySelector('.btn-text') as HTMLElement;
+    const btnLoading = saveBtn.querySelector('.btn-loading') as HTMLElement;
+
+    saveBtn.disabled = loading;
+    btnText.style.display = loading ? 'none' : 'inline';
+    btnLoading.style.display = loading ? 'inline-flex' : 'none';
+  }
+
+  private async saveCustomTone(): Promise<void> {
+    if (!this.customToneModal) return;
+
+    const nameInput = this.customToneModal.querySelector('#customToneName') as HTMLInputElement;
+    const descInput = this.customToneModal.querySelector('#customToneDescription') as HTMLTextAreaElement;
+
+    const name = nameInput?.value.trim() || '';
+    const description = descInput?.value.trim() || '';
+
+    if (!name) {
+      await modal.warning('请输入语气名称');
+      nameInput?.focus();
+      return;
+    }
+
+    if (name.length > 8) {
+      await modal.warning('语气名称不能超过8个汉字');
+      nameInput?.focus();
+      return;
+    }
+
+    if (!description) {
+      await modal.warning('请输入语气说明');
+      descInput?.focus();
+      return;
+    }
+
+    if (description.length > 500) {
+      await modal.warning('语气说明不能超过500个汉字');
+      descInput?.focus();
+      return;
+    }
+
+    this.setCustomToneLoading(true);
+
+    try {
+      const url = this.selectedCustomToneId 
+        ? `/api/copywriting/custom-tones/${this.selectedCustomToneId}`
+        : '/api/copywriting/custom-tones';
+      const method = this.selectedCustomToneId ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name, description }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        await this.loadCustomTones();
+        this.closeCustomToneModal();
+        await modal.success(this.selectedCustomToneId ? '语气风格已更新' : '语气风格已添加');
+      } else {
+        await modal.error(result.error || '保存失败');
+      }
+    } catch (error) {
+      console.error('Error saving custom tone:', error);
+      await modal.error('网络错误，请检查服务器是否正常运行');
+    } finally {
+      this.setCustomToneLoading(false);
+    }
+  }
+
+  private async loadCustomTones(): Promise<void> {
+    try {
+      const response = await fetch('/api/copywriting/custom-tones');
+      const result = await response.json();
+      
+      if (result.success) {
+        this.customTones = result.customTones || [];
+        this.updateToneSelect();
+      }
+    } catch (error) {
+      console.error('Error loading custom tones:', error);
+    }
+  }
+
+  private updateToneSelect(): void {
+    const select = document.getElementById('tone') as HTMLSelectElement;
+    if (!select) return;
+
+    const currentValue = select.value;
+    
+    const defaultOptions = [
+      { value: '正式', label: '正式' },
+      { value: '轻松', label: '轻松' },
+      { value: '幽默', label: '幽默' },
+      { value: '专业', label: '专业' },
+      { value: '亲切', label: '亲切' },
+      { value: '激情', label: '激情' },
+      { value: '温暖', label: '温暖' },
+      { value: '客观', label: '客观' },
+    ];
+
+    select.innerHTML = '';
+    
+    const defaultGroup = document.createElement('optgroup');
+    defaultGroup.label = '预设语气';
+    defaultOptions.forEach(opt => {
+      const option = document.createElement('option');
+      option.value = opt.value;
+      option.textContent = opt.label;
+      defaultGroup.appendChild(option);
+    });
+    select.appendChild(defaultGroup);
+
+    if (this.customTones.length > 0) {
+      const customGroup = document.createElement('optgroup');
+      customGroup.label = '自定义语气';
+      this.customTones.forEach(tone => {
+        const option = document.createElement('option');
+        option.value = tone.name;
+        option.textContent = tone.name;
+        option.dataset['customToneId'] = tone.id;
+        customGroup.appendChild(option);
+      });
+      select.appendChild(customGroup);
+    }
+
+    const existingOption = select.querySelector(`option[value="${currentValue}"]`);
+    if (existingOption) {
+      select.value = currentValue;
+    }
+  }
+
+  private async deleteCustomTone(toneId: string): Promise<void> {
+    const confirmed = await modal.confirm('确定要删除这个自定义语气吗？');
+    if (!confirmed) return;
+
+    try {
+      const response = await fetch(`/api/copywriting/custom-tones/${toneId}`, {
+        method: 'DELETE',
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        await this.loadCustomTones();
+        await modal.success('语气风格已删除');
+      } else {
+        await modal.error(result.error || '删除失败');
+      }
+    } catch (error) {
+      console.error('Error deleting custom tone:', error);
+      await modal.error('网络错误，请检查服务器是否正常运行');
+    }
   }
 
   private listenProviderConfigChanges(): void {
@@ -302,6 +598,7 @@ export class AutoCopyApp {
     const formData = new FormData(this.form);
     const articleTypeSelect = document.getElementById('articleType') as HTMLSelectElement;
     const articleTypeCustom = document.getElementById('articleTypeCustom') as HTMLInputElement;
+    const toneSelect = document.getElementById('tone') as HTMLSelectElement;
     
     const articleType = articleTypeSelect.value === 'custom' 
       ? articleTypeCustom.value 
@@ -310,9 +607,13 @@ export class AutoCopyApp {
     const countRadio = document.querySelector('input[name="count"]:checked') as HTMLInputElement;
     const count = countRadio ? parseInt(countRadio.value, 10) : 3;
 
+    const selectedToneOption = toneSelect.options[toneSelect.selectedIndex];
+    const customToneId = selectedToneOption?.dataset['customToneId'] || undefined;
+
     const data = {
       articleType: articleType || '推广文案',
       tone: formData.get('tone'),
+      customToneId: customToneId,
       useParagraphs: formData.has('useParagraphs'),
       useEmoji: formData.has('useEmoji'),
       useHashtag: formData.has('useHashtag'),

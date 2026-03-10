@@ -49,16 +49,23 @@
 
           <div class="form-group">
             <label for="tone">语气风格</label>
-            <select id="tone" name="tone">
-              <option value="正式">正式</option>
-              <option value="轻松" selected>轻松</option>
-              <option value="幽默">幽默</option>
-              <option value="专业">专业</option>
-              <option value="亲切">亲切</option>
-              <option value="激情">激情</option>
-              <option value="温暖">温暖</option>
-              <option value="客观">客观</option>
-            </select>
+            <div class="input-with-custom">
+              <select id="tone" name="tone">
+                <option value="正式">正式</option>
+                <option value="轻松" selected>轻松</option>
+                <option value="幽默">幽默</option>
+                <option value="专业">专业</option>
+                <option value="亲切">亲切</option>
+                <option value="激情">激情</option>
+                <option value="温暖">温暖</option>
+                <option value="客观">客观</option>
+              </select>
+              <button type="button" id="addCustomToneBtn" class="btn-add-custom" title="添加自定义语气">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 5v14M5 12h14"/>
+                </svg>
+              </button>
+            </div>
           </div>
 
           <div class="form-group">

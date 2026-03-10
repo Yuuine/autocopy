@@ -18,6 +18,14 @@ export type Tone =
   | '温暖'
   | '客观';
 
+export interface CustomTone {
+  id: string;
+  name: string;
+  description: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export type Platform = 
   | '微信公众号'
   | '微博'
@@ -29,6 +37,7 @@ export type Platform =
 export interface CopywritingRequest {
   articleType: ArticleType;
   tone: Tone;
+  customToneId?: string;
   useParagraphs: boolean;
   useEmoji: boolean;
   useHashtag: boolean;

@@ -4,6 +4,7 @@ import type {
   ArticleType, 
   Platform 
 } from '../types';
+import { getCustomToneById } from '../utils/userConfig';
 
 const toneDescriptions: Record<Tone, string> = {
   '正式': '使用正式、专业的语言风格，适合商务场合',
@@ -37,7 +38,19 @@ const articleTypeGuidelines: Record<ArticleType, string> = {
 };
 
 export function buildSystemPrompt(request: CopywritingRequest): string {
-  const { articleType, tone, platform = '通用' } = request;
+  const { articleType, tone, platform = '通用', customToneId } = request;
+
+  let toneDescription: string;
+  if (customToneId) {
+    const customTone = getCustomToneById(customToneId);
+    if (customTone) {
+      toneDescription = customTone.description;
+    } else {
+      toneDescription = toneDescriptions[tone] || '使用标准语言风格';
+    }
+  } else {
+    toneDescription = toneDescriptions[tone] || '使用标准语言风格';
+  }
 
   return `你是一位专业的社交媒体文案撰写专家。你的任务是根据用户的需求创作高质量的社交媒体文案。
 
@@ -45,8 +58,8 @@ export function buildSystemPrompt(request: CopywritingRequest): string {
 - 文章类型：${articleType}
   ${articleTypeGuidelines[articleType]}
 
-- 语气风格：${tone}
-  ${toneDescriptions[tone]}
+- 语气风格：${customToneId ? `[自定义] ${tone}` : tone}
+  ${toneDescription}
 
 - 目标平台：${platform}
   ${platformGuidelines[platform]}

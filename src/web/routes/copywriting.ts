@@ -4,7 +4,7 @@ import type { AIProvider } from '../../types';
 import { AIServiceFactory } from '../../services/ai';
 import { CopyGenerator } from '../../services/generator';
 import type { GenerationOptions } from '../../types';
-import { getDecryptedProviderConfig, getDefaultProvider, hasProviderConfig } from '../../utils/userConfig';
+import { getDecryptedProviderConfig, getDefaultProvider, hasProviderConfig, getCustomTones, addCustomTone, updateCustomTone, deleteCustomTone, getCustomToneById } from '../../utils/userConfig';
 import { createError } from '../middleware';
 import { buildSystemPrompt, buildUserPrompt, buildMultiVersionPrompt } from '../../templates';
 
@@ -13,6 +13,7 @@ const router = Router();
 interface GenerateRequestBody extends CopywritingRequest {
   provider?: AIProvider;
   count?: number;
+  customToneId?: string;
 }
 
 async function generateWithProvider(
@@ -65,6 +66,7 @@ router.post('/generate', async (req: Request, res: Response): Promise<void> => {
       additionalRequirements,
       count,
       provider: requestedProvider,
+      customToneId,
     } = req.body as GenerateRequestBody;
 
     if (!content) {
@@ -103,6 +105,9 @@ router.post('/generate', async (req: Request, res: Response): Promise<void> => {
     }
     if (additionalRequirements) {
       request.additionalRequirements = additionalRequirements;
+    }
+    if (customToneId) {
+      request.customToneId = customToneId;
     }
 
     const result = await generateWithProvider(provider, request, {
@@ -171,6 +176,7 @@ router.post('/preview', (req: Request, res: Response): void => {
       keywords,
       additionalRequirements,
       count,
+      customToneId,
     } = req.body as GenerateRequestBody;
 
     if (!content) {
@@ -197,6 +203,9 @@ router.post('/preview', (req: Request, res: Response): void => {
     }
     if (additionalRequirements) {
       request.additionalRequirements = additionalRequirements;
+    }
+    if (customToneId) {
+      request.customToneId = customToneId;
     }
 
     const systemPrompt = buildSystemPrompt(request);
@@ -311,6 +320,159 @@ router.post('/generate-with-prompt', async (req: Request, res: Response): Promis
       throw createError(error.message, 400);
     }
     throw createError('生成失败', 500);
+  }
+});
+
+router.get('/custom-tones', (_req: Request, res: Response): void => {
+  try {
+    const customTones = getCustomTones();
+    res.json({
+      success: true,
+      customTones,
+    });
+  } catch (error) {
+    if (error instanceof Error) {
+      throw createError(error.message, 400);
+    }
+    throw createError('获取自定义语气失败', 500);
+  }
+});
+
+interface AddCustomToneBody {
+  name: string;
+  description: string;
+}
+
+router.post('/custom-tones', (req: Request, res: Response): void => {
+  try {
+    const { name, description } = req.body as AddCustomToneBody;
+
+    if (!name || name.trim().length === 0) {
+      throw createError('语气名称不能为空', 400);
+    }
+
+    if (name.length > 8) {
+      throw createError('语气名称不能超过8个汉字', 400);
+    }
+
+    if (!description || description.trim().length === 0) {
+      throw createError('语气说明不能为空', 400);
+    }
+
+    if (description.length > 500) {
+      throw createError('语气说明不能超过500个汉字', 400);
+    }
+
+    const customTone = addCustomTone(name.trim(), description.trim());
+    res.json({
+      success: true,
+      customTone,
+    });
+  } catch (error) {
+    if (error instanceof Error) {
+      throw createError(error.message, 400);
+    }
+    throw createError('添加自定义语气失败', 500);
+  }
+});
+
+interface UpdateCustomToneBody {
+  name: string;
+  description: string;
+}
+
+router.put('/custom-tones/:id', (req: Request, res: Response): void => {
+  try {
+    const { id } = req.params;
+    
+    if (!id) {
+      throw createError('缺少语气ID', 400);
+    }
+    
+    const { name, description } = req.body as UpdateCustomToneBody;
+
+    if (!name || name.trim().length === 0) {
+      throw createError('语气名称不能为空', 400);
+    }
+
+    if (name.length > 8) {
+      throw createError('语气名称不能超过8个汉字', 400);
+    }
+
+    if (!description || description.trim().length === 0) {
+      throw createError('语气说明不能为空', 400);
+    }
+
+    if (description.length > 500) {
+      throw createError('语气说明不能超过500个汉字', 400);
+    }
+
+    const customTone = updateCustomTone(id, name.trim(), description.trim());
+    
+    if (!customTone) {
+      throw createError('自定义语气不存在', 404);
+    }
+
+    res.json({
+      success: true,
+      customTone,
+    });
+  } catch (error) {
+    if (error instanceof Error) {
+      throw createError(error.message, 400);
+    }
+    throw createError('更新自定义语气失败', 500);
+  }
+});
+
+router.delete('/custom-tones/:id', (req: Request, res: Response): void => {
+  try {
+    const { id } = req.params;
+    
+    if (!id) {
+      throw createError('缺少语气ID', 400);
+    }
+    
+    const success = deleteCustomTone(id);
+    
+    if (!success) {
+      throw createError('自定义语气不存在', 404);
+    }
+
+    res.json({
+      success: true,
+    });
+  } catch (error) {
+    if (error instanceof Error) {
+      throw createError(error.message, 400);
+    }
+    throw createError('删除自定义语气失败', 500);
+  }
+});
+
+router.get('/custom-tones/:id', (req: Request, res: Response): void => {
+  try {
+    const { id } = req.params;
+    
+    if (!id) {
+      throw createError('缺少语气ID', 400);
+    }
+    
+    const customTone = getCustomToneById(id);
+    
+    if (!customTone) {
+      throw createError('自定义语气不存在', 404);
+    }
+
+    res.json({
+      success: true,
+      customTone,
+    });
+  } catch (error) {
+    if (error instanceof Error) {
+      throw createError(error.message, 400);
+    }
+    throw createError('获取自定义语气失败', 500);
   }
 });
 
