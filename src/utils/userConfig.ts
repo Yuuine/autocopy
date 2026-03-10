@@ -30,7 +30,7 @@ function ensureConfigDir(): void {
 
 function getEmptyConfig(): UserConfig {
   return {
-    defaultProvider: 'deepseek',
+    defaultProvider: '' as AIProvider,
     providers: {} as Record<AIProvider, UserProviderConfig>,
   };
 }
@@ -204,7 +204,7 @@ export function removeProviderConfig(provider: AIProvider): boolean {
     const enabledProviders = Object.keys(config.providers).filter(
       p => config.providers[p as AIProvider]?.enabled
     ) as AIProvider[];
-    config.defaultProvider = enabledProviders[0] ?? 'deepseek';
+    config.defaultProvider = enabledProviders[0] ?? '' as AIProvider;
   }
   
   saveUserConfig(config);

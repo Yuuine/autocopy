@@ -1,4 +1,10 @@
 import { ProviderConfigManager } from './providerConfig.js';
+import { modal } from './modal.js';
+
+interface PromptPreview {
+  system: string;
+  user: string;
+}
 
 export class AutoCopyApp {
   private form: HTMLFormElement;
@@ -7,6 +13,9 @@ export class AutoCopyApp {
   private submitBtn: HTMLButtonElement;
   private providerConfigManager: ProviderConfigManager;
   private keywords: string[] = [];
+  private promptPreviewModal: HTMLElement | null = null;
+  private currentPromptPreview: PromptPreview | null = null;
+  private currentFormData: any = null;
 
   constructor() {
     this.form = document.getElementById('generateForm') as HTMLFormElement;
@@ -24,6 +33,100 @@ export class AutoCopyApp {
     this.initArticleTypeCustom();
     this.initKeywordsInput();
     this.listenProviderConfigChanges();
+    this.createPromptPreviewModal();
+  }
+
+  private createPromptPreviewModal(): void {
+    const modalHTML = `
+      <div id="promptPreviewModal" class="prompt-preview-modal">
+        <div class="prompt-preview-content">
+          <div class="prompt-preview-header">
+            <h2>预览并编辑提示词</h2>
+            <button class="prompt-preview-close" id="closePromptPreview" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 6L6 18"/>
+                <path d="M6 6l12 12"/>
+              </svg>
+            </button>
+          </div>
+          <div class="prompt-preview-body">
+            <div class="prompt-section">
+              <label for="systemPromptEdit">系统提示词 (System Prompt)</label>
+              <textarea id="systemPromptEdit" rows="8" placeholder="系统提示词..."></textarea>
+            </div>
+            <div class="prompt-section">
+              <label for="userPromptEdit">用户提示词 (User Prompt)</label>
+              <textarea id="userPromptEdit" rows="12" placeholder="用户提示词..."></textarea>
+            </div>
+          </div>
+          <div class="prompt-preview-footer">
+            <button type="button" class="btn btn-secondary" id="cancelPromptPreview">取消</button>
+            <button type="button" class="btn btn-primary" id="sendEditedPrompt">
+              <span class="btn-text">发送提示词</span>
+              <span class="btn-loading">
+                <span class="spinner"></span>
+                生成中
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    this.promptPreviewModal = document.getElementById('promptPreviewModal');
+    this.bindPromptPreviewEvents();
+  }
+
+  private bindPromptPreviewEvents(): void {
+    if (!this.promptPreviewModal) return;
+
+    const closeBtn = this.promptPreviewModal.querySelector('#closePromptPreview');
+    const cancelBtn = this.promptPreviewModal.querySelector('#cancelPromptPreview');
+    const sendBtn = this.promptPreviewModal.querySelector('#sendEditedPrompt');
+
+    closeBtn?.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.closePromptPreviewModal();
+    });
+
+    cancelBtn?.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.closePromptPreviewModal();
+    });
+
+    sendBtn?.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.sendEditedPrompt();
+    });
+
+    this.promptPreviewModal.addEventListener('click', (e) => {
+      if (e.target === this.promptPreviewModal) {
+        this.closePromptPreviewModal();
+      }
+    });
+  }
+
+  private openPromptPreviewModal(): void {
+    if (!this.promptPreviewModal) return;
+    this.promptPreviewModal.classList.add('visible');
+  }
+
+  private closePromptPreviewModal(): void {
+    if (!this.promptPreviewModal) return;
+    this.promptPreviewModal.classList.remove('visible');
+    this.setPromptPreviewLoading(false);
+  }
+
+  private setPromptPreviewLoading(loading: boolean): void {
+    const sendBtn = this.promptPreviewModal?.querySelector('#sendEditedPrompt') as HTMLButtonElement;
+    if (!sendBtn) return;
+
+    const btnText = sendBtn.querySelector('.btn-text') as HTMLElement;
+    const btnLoading = sendBtn.querySelector('.btn-loading') as HTMLElement;
+
+    sendBtn.disabled = loading;
+    btnText.style.display = loading ? 'none' : 'inline';
+    btnLoading.style.display = loading ? 'inline-flex' : 'none';
   }
 
   private listenProviderConfigChanges(): void {
@@ -53,7 +156,14 @@ export class AutoCopyApp {
 
     const configuredProviders = providers.filter((p: any) => p.configured);
     
-    select.innerHTML = '<option value="">使用默认模型</option>';
+    if (configuredProviders.length === 0) {
+      select.innerHTML = '<option value="">请先配置模型</option>';
+      select.disabled = true;
+      return;
+    }
+    
+    select.disabled = false;
+    select.innerHTML = '<option value="">选择模型</option>';
     
     configuredProviders.forEach((provider: any) => {
       const option = document.createElement('option');
@@ -205,6 +315,7 @@ export class AutoCopyApp {
       tone: formData.get('tone'),
       useParagraphs: formData.has('useParagraphs'),
       useEmoji: formData.has('useEmoji'),
+      useHashtag: formData.has('useHashtag'),
       content: formData.get('content'),
       wordCount: parseInt(formData.get('wordCount') as string, 10),
       keywords: this.keywords.length > 0 ? this.keywords : undefined,
@@ -213,6 +324,100 @@ export class AutoCopyApp {
       provider: formData.get('provider') || undefined,
     };
 
+    const previewPrompt = formData.has('previewPrompt');
+    this.currentFormData = data;
+
+    if (previewPrompt) {
+      await this.showPromptPreview(data);
+    } else {
+      await this.generateDirectly(data);
+    }
+  }
+
+  private async showPromptPreview(data: any): Promise<void> {
+    this.setLoading(true);
+    this.hideResults();
+
+    try {
+      const response = await fetch('/api/copywriting/preview', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        this.currentPromptPreview = result.prompts;
+        
+        const systemPromptEdit = this.promptPreviewModal?.querySelector('#systemPromptEdit') as HTMLTextAreaElement;
+        const userPromptEdit = this.promptPreviewModal?.querySelector('#userPromptEdit') as HTMLTextAreaElement;
+        
+        if (systemPromptEdit) systemPromptEdit.value = result.prompts.system;
+        if (userPromptEdit) userPromptEdit.value = result.prompts.user;
+        
+        this.openPromptPreviewModal();
+      } else {
+        await modal.error(result.error || '预览生成失败');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      await modal.error('网络错误，请检查服务器是否正常运行');
+    } finally {
+      this.setLoading(false);
+    }
+  }
+
+  private async sendEditedPrompt(): Promise<void> {
+    if (!this.currentFormData) return;
+
+    const systemPromptEdit = this.promptPreviewModal?.querySelector('#systemPromptEdit') as HTMLTextAreaElement;
+    const userPromptEdit = this.promptPreviewModal?.querySelector('#userPromptEdit') as HTMLTextAreaElement;
+
+    const systemPrompt = systemPromptEdit?.value || '';
+    const userPrompt = userPromptEdit?.value || '';
+
+    if (!systemPrompt || !userPrompt) {
+      await modal.warning('提示词不能为空');
+      return;
+    }
+
+    this.setPromptPreviewLoading(true);
+    this.hideResults();
+
+    try {
+      const response = await fetch('/api/copywriting/generate-with-prompt', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          provider: this.currentFormData.provider,
+          systemPrompt,
+          userPrompt,
+          count: this.currentFormData.count,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        this.closePromptPreviewModal();
+        this.showResults(result.results, result.provider);
+      } else {
+        await modal.error(result.error || '生成失败，请稍后重试');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      await modal.error('网络错误，请检查服务器是否正常运行');
+    } finally {
+      this.setPromptPreviewLoading(false);
+    }
+  }
+
+  private async generateDirectly(data: any): Promise<void> {
     this.setLoading(true);
     this.hideResults();
 

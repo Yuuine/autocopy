@@ -1005,3 +1005,155 @@ body {
     width: 100%;
   }
 }
+
+/* Prompt Preview Modal Styles */
+.prompt-preview-modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  z-index: 1600;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.prompt-preview-modal.visible {
+  display: flex;
+  opacity: 1;
+  visibility: visible;
+}
+
+.prompt-preview-content {
+  background: var(--bg-secondary);
+  border-radius: var(--radius);
+  width: 100%;
+  max-width: 720px;
+  max-height: 85vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-lg);
+  transform: scale(0.95);
+  transition: transform 0.2s ease;
+}
+
+.prompt-preview-modal.visible .prompt-preview-content {
+  transform: scale(1);
+}
+
+.prompt-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.prompt-preview-header h2 {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.prompt-preview-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+  padding: 0;
+}
+
+.prompt-preview-close:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.prompt-preview-close svg {
+  width: 16px;
+  height: 16px;
+}
+
+.prompt-preview-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.prompt-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.prompt-section label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.prompt-section textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  transition: all var(--transition);
+  resize: vertical;
+  min-height: 120px;
+  line-height: 1.6;
+}
+
+.prompt-section textarea:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.15);
+}
+
+.prompt-preview-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+@media (max-width: 600px) {
+  .prompt-preview-content {
+    max-width: calc(100% - 32px);
+    max-height: calc(100vh - 32px);
+  }
+  
+  .prompt-preview-body {
+    padding: 16px;
+  }
+  
+  .prompt-preview-footer {
+    flex-direction: column-reverse;
+  }
+  
+  .prompt-preview-footer .btn {
+    width: 100%;
+  }
+}

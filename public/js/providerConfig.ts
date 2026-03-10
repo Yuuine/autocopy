@@ -21,7 +21,7 @@ export interface ProviderConfig {
 export class ProviderConfigManager {
   private configModal: HTMLElement | null = null;
   private providers: ProviderInfo[] = [];
-  private defaultProvider: string = 'deepseek';
+  private defaultProvider: string = '';
   private enabledProviders: string[] = [];
   private isInitialized: boolean = false;
   private initPromise: Promise<void> | null = null;

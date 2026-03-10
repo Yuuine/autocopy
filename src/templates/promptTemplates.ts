@@ -69,6 +69,7 @@ export function buildUserPrompt(request: CopywritingRequest): string {
     wordCount, 
     useParagraphs, 
     useEmoji,
+    useHashtag,
     keywords,
     additionalRequirements 
   } = request;
@@ -83,7 +84,8 @@ ${content}
 
 ## 格式要求
 - ${useParagraphs ? '需要分段，每段不宜过长' : '不需要分段，保持连贯'}
-- ${useEmoji ? '适当添加表情符号，增加趣味性' : '不使用表情符号，保持简洁'}`;
+- ${useEmoji ? '适当添加表情符号，增加趣味性' : '不使用表情符号，保持简洁'}
+- ${useHashtag ? '在文案末尾添加3-5个相关的话题标签（格式为#标签），标签应基于文案核心内容，选择当前社交媒体平台上流行、使用广泛的相关话题标签' : '不需要添加话题标签'}`;
 
   if (keywords && keywords.length > 0) {
     prompt += `\n\n## 关键词

@@ -31,6 +31,7 @@ export interface CopywritingRequest {
   tone: Tone;
   useParagraphs: boolean;
   useEmoji: boolean;
+  useHashtag: boolean;
   content: string;
   wordCount: number;
   platform?: Platform;
@@ -51,6 +52,7 @@ export interface CopywritingMetadata {
   platform: Platform;
   hasEmoji: boolean;
   hasParagraphs: boolean;
+  hasHashtag: boolean;
   createdAt: Date;
 }
 
