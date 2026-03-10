@@ -1,22 +1,56 @@
 import { Router, Request, Response } from 'express';
-import { AutoCopy, type CopywritingRequest } from '../../index';
+import type { CopywritingRequest } from '../../index';
+import type { AIProvider } from '../../types';
+import { AIServiceFactory } from '../../services/ai';
+import { CopyGenerator } from '../../services/generator';
+import type { GenerationOptions } from '../../types';
+import { getDecryptedProviderConfig, getDefaultProvider, hasProviderConfig } from '../../utils/userConfig';
 import { createError } from '../middleware';
 
 const router = Router();
 
-let autoCopyInstance: AutoCopy | null = null;
+interface GenerateRequestBody extends CopywritingRequest {
+  provider?: AIProvider;
+  count?: number;
+}
 
-function getAutoCopy(): AutoCopy {
-  if (!autoCopyInstance) {
-    autoCopyInstance = new AutoCopy();
+async function generateWithProvider(
+  provider: AIProvider,
+  request: CopywritingRequest,
+  options?: { count?: number }
+) {
+  const config = getDecryptedProviderConfig(provider);
+  
+  if (!config) {
+    throw new Error(`模型 ${provider} 未配置或未启用`);
   }
-  return autoCopyInstance;
+  
+  const serviceConfig: { apiKey: string; secretKey?: string; baseUrl?: string; model?: string } = {
+    apiKey: config.apiKey,
+  };
+  
+  if (config.secretKey) {
+    serviceConfig.secretKey = config.secretKey;
+  }
+  if (config.baseUrl) {
+    serviceConfig.baseUrl = config.baseUrl;
+  }
+  if (config.model) {
+    serviceConfig.model = config.model;
+  }
+  
+  const aiService = AIServiceFactory.createService(provider, serviceConfig);
+  const generator = new CopyGenerator(aiService);
+  
+  const genOptions: GenerationOptions | undefined = options?.count !== undefined 
+    ? { count: options.count }
+    : undefined;
+  
+  return generator.generate(request, genOptions);
 }
 
 router.post('/generate', async (req: Request, res: Response): Promise<void> => {
   try {
-    const autoCopy = getAutoCopy();
-    
     const {
       articleType,
       tone,
@@ -28,7 +62,8 @@ router.post('/generate', async (req: Request, res: Response): Promise<void> => {
       keywords,
       additionalRequirements,
       count,
-    } = req.body;
+      provider: requestedProvider,
+    } = req.body as GenerateRequestBody;
 
     if (!content) {
       throw createError('内容描述不能为空', 400);
@@ -36,6 +71,18 @@ router.post('/generate', async (req: Request, res: Response): Promise<void> => {
 
     if (!wordCount || wordCount < 10 || wordCount > 2000) {
       throw createError('字数要求必须在 10-2000 之间', 400);
+    }
+
+    const provider: AIProvider = requestedProvider ?? getDefaultProvider();
+    
+    if (!hasProviderConfig(provider)) {
+      const defaultConfigured = hasProviderConfig(getDefaultProvider());
+      if (!defaultConfigured) {
+        throw createError(
+          '请先配置至少一个模型服务。前往"模型配置"页面添加您的 API 密钥。',
+          400
+        );
+      }
     }
 
     const request: CopywritingRequest = {
@@ -46,17 +93,28 @@ router.post('/generate', async (req: Request, res: Response): Promise<void> => {
       content,
       wordCount,
       platform: platform ?? '通用',
-      keywords,
-      additionalRequirements,
     };
+    
+    if (keywords) {
+      request.keywords = keywords;
+    }
+    if (additionalRequirements) {
+      request.additionalRequirements = additionalRequirements;
+    }
 
-    const result = await autoCopy.generate(request, {
+    const result = await generateWithProvider(provider, request, {
       count: count ?? 3,
     });
 
-    res.json(result);
+    res.json({
+      ...result,
+      provider,
+    });
   } catch (error) {
     if (error instanceof Error) {
+      if (error.message.includes('API key')) {
+        throw createError('API 密钥无效或已过期，请检查配置', 401);
+      }
       throw createError(error.message, 400);
     }
     throw createError('生成失败', 500);

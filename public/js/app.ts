@@ -1,76 +1,216 @@
+import { ProviderConfigManager } from './providerConfig.js';
+
 export class AutoCopyApp {
   private form: HTMLFormElement;
   private resultsSection: HTMLElement;
   private resultsContainer: HTMLElement;
   private submitBtn: HTMLButtonElement;
-  private optionsCache: any = null;
+  private providerConfigManager: ProviderConfigManager;
+  private keywords: string[] = [];
 
   constructor() {
     this.form = document.getElementById('generateForm') as HTMLFormElement;
     this.resultsSection = document.getElementById('results') as HTMLElement;
     this.resultsContainer = document.getElementById('resultsContainer') as HTMLElement;
     this.submitBtn = document.getElementById('submitBtn') as HTMLButtonElement;
+    this.providerConfigManager = new ProviderConfigManager();
     
     this.init();
   }
 
   private async init(): Promise<void> {
-    await this.loadOptions();
+    await this.loadProviders();
     this.bindEvents();
+    this.initArticleTypeCustom();
+    this.initKeywordsInput();
+    this.listenProviderConfigChanges();
   }
 
-  private async loadOptions(): Promise<void> {
+  private listenProviderConfigChanges(): void {
+    document.addEventListener('providerConfigChanged', ((e: CustomEvent) => {
+      const { providers, defaultProvider } = e.detail;
+      this.updateProviderSelect(providers, defaultProvider);
+      this.updateCurrentProviderInfo(providers, defaultProvider);
+    }) as EventListener);
+  }
+
+  private async loadProviders(): Promise<void> {
     try {
-      const response = await fetch('/api/copywriting/options');
-      if (!response.ok) throw new Error('Failed to load options');
+      const response = await fetch('/api/providers');
+      if (!response.ok) throw new Error('Failed to load providers');
       
-      this.optionsCache = await response.json();
-      this.populateSelect('articleType', this.optionsCache.articleTypes);
-      this.populateSelect('tone', this.optionsCache.tones);
-      this.populateSelect('platform', this.optionsCache.platforms);
+      const data = await response.json();
+      this.updateProviderSelect(data.providers, data.defaultProvider);
+      this.updateCurrentProviderInfo(data.providers, data.defaultProvider);
     } catch (error) {
-      console.error('Error loading options:', error);
+      console.error('Error loading providers:', error);
     }
   }
 
-  private populateSelect(selectId: string, options: Array<{value: string, label: string}>): void {
-    const select = document.getElementById(selectId) as HTMLSelectElement;
-    if (!select || !options) return;
+  private updateProviderSelect(providers: any[], defaultProvider: string): void {
+    const select = document.getElementById('provider') as HTMLSelectElement;
+    if (!select) return;
 
-    const placeholder = select.querySelector('option[value=""]');
+    const configuredProviders = providers.filter((p: any) => p.configured);
     
-    options.forEach(option => {
-      const optElement = document.createElement('option');
-      optElement.value = option.value;
-      optElement.textContent = option.label;
-      select.appendChild(optElement);
+    select.innerHTML = '<option value="">使用默认模型</option>';
+    
+    configuredProviders.forEach((provider: any) => {
+      const option = document.createElement('option');
+      option.value = provider.id;
+      option.textContent = `${provider.name}${provider.id === defaultProvider ? ' (默认)' : ''}`;
+      select.appendChild(option);
+    });
+  }
+
+  private updateCurrentProviderInfo(providers: any[], defaultProvider: string): void {
+    const nameEl = document.getElementById('currentProviderName');
+    if (!nameEl) return;
+
+    const defaultProviderInfo = providers.find((p: any) => p.id === defaultProvider);
+    if (defaultProviderInfo && defaultProviderInfo.configured) {
+      nameEl.textContent = defaultProviderInfo.name;
+    } else {
+      const configuredProvider = providers.find((p: any) => p.configured);
+      if (configuredProvider) {
+        nameEl.textContent = `${configuredProvider.name}`;
+      } else {
+        nameEl.textContent = '未配置模型';
+      }
+    }
+  }
+
+  private initArticleTypeCustom(): void {
+    const select = document.getElementById('articleType') as HTMLSelectElement;
+    const customInput = document.getElementById('articleTypeCustom') as HTMLInputElement;
+
+    select.addEventListener('change', () => {
+      if (select.value === 'custom') {
+        select.style.display = 'none';
+        customInput.style.display = 'block';
+        customInput.focus();
+      }
     });
 
-    if (placeholder) {
-      (placeholder as HTMLOptionElement).selected = true;
-    }
+    customInput.addEventListener('blur', () => {
+      if (!customInput.value.trim()) {
+        customInput.style.display = 'none';
+        select.style.display = 'block';
+        select.value = '推广文案';
+      }
+    });
+
+    customInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        customInput.style.display = 'none';
+        select.style.display = 'block';
+        select.value = '推广文案';
+      }
+    });
+  }
+
+  private initKeywordsInput(): void {
+    const input = document.getElementById('keywords') as HTMLInputElement;
+    const tagsContainer = document.getElementById('keywordsTags') as HTMLElement;
+    const hint = document.getElementById('keywordsHint') as HTMLElement;
+
+    input.addEventListener('input', () => {
+      const value = input.value;
+      const result = this.parseKeywords(value);
+      
+      if (result.invalid.length > 0) {
+        hint.textContent = `无法识别: ${result.invalid.join(', ')}`;
+        hint.classList.add('error');
+      } else {
+        hint.textContent = '';
+        hint.classList.remove('error');
+      }
+      
+      this.keywords = result.valid;
+      this.renderKeywordsTags(tagsContainer);
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Backspace' && !input.value && this.keywords.length > 0) {
+        this.keywords.pop();
+        this.renderKeywordsTags(tagsContainer);
+      }
+    });
+  }
+
+  private parseKeywords(input: string): { valid: string[]; invalid: string[] } {
+    const valid: string[] = [];
+    const invalid: string[] = [];
+    
+    const chinesePattern = /^[\u4e00-\u9fa5]+$/;
+    const englishPattern = /^[a-zA-Z]+$/;
+    const mixedPattern = /^[\u4e00-\u9fa5a-zA-Z0-9]+$/;
+    
+    const parts = input
+      .replace(/[,，\s]+/g, ' ')
+      .split(' ')
+      .map(p => p.trim())
+      .filter(p => p.length > 0);
+
+    parts.forEach(part => {
+      if (part.length >= 2 && part.length <= 20 && mixedPattern.test(part)) {
+        if (!valid.includes(part)) {
+          valid.push(part);
+        }
+      } else if (part.length > 0) {
+        invalid.push(part);
+      }
+    });
+
+    return { valid, invalid };
+  }
+
+  private renderKeywordsTags(container: HTMLElement): void {
+    container.innerHTML = this.keywords.map((keyword, index) => `
+      <span class="keyword-tag">
+        ${keyword}
+        <button type="button" class="remove" data-index="${index}">×</button>
+      </span>
+    `).join('');
+
+    container.querySelectorAll('.remove').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const index = parseInt((e.currentTarget as HTMLElement).dataset['index'] || '0', 10);
+        this.keywords.splice(index, 1);
+        this.renderKeywordsTags(container);
+      });
+    });
   }
 
   private bindEvents(): void {
     this.form.addEventListener('submit', (e) => this.handleSubmit(e));
-    this.form.addEventListener('reset', () => this.handleReset());
   }
 
   private async handleSubmit(e: Event): Promise<void> {
     e.preventDefault();
     
     const formData = new FormData(this.form);
+    const articleTypeSelect = document.getElementById('articleType') as HTMLSelectElement;
+    const articleTypeCustom = document.getElementById('articleTypeCustom') as HTMLInputElement;
+    
+    const articleType = articleTypeSelect.value === 'custom' 
+      ? articleTypeCustom.value 
+      : articleTypeSelect.value;
+
+    const countRadio = document.querySelector('input[name="count"]:checked') as HTMLInputElement;
+    const count = countRadio ? parseInt(countRadio.value, 10) : 3;
+
     const data = {
-      articleType: formData.get('articleType'),
+      articleType: articleType || '推广文案',
       tone: formData.get('tone'),
       useParagraphs: formData.has('useParagraphs'),
       useEmoji: formData.has('useEmoji'),
       content: formData.get('content'),
       wordCount: parseInt(formData.get('wordCount') as string, 10),
-      platform: formData.get('platform') || undefined,
-      keywords: formData.get('keywords') ? (formData.get('keywords') as string).split(',').map(k => k.trim()).filter(Boolean) : undefined,
+      keywords: this.keywords.length > 0 ? this.keywords : undefined,
       additionalRequirements: formData.get('additionalRequirements') || undefined,
-      count: parseInt(formData.get('count') as string, 10),
+      count: count,
+      provider: formData.get('provider') || undefined,
     };
 
     this.setLoading(true);
@@ -88,7 +228,7 @@ export class AutoCopyApp {
       const result = await response.json();
 
       if (result.success) {
-        this.showResults(result.results);
+        this.showResults(result.results, result.provider);
       } else {
         this.showError(result.error || '生成失败，请稍后重试');
       }
@@ -98,10 +238,6 @@ export class AutoCopyApp {
     } finally {
       this.setLoading(false);
     }
-  }
-
-  private handleReset(): void {
-    this.hideResults();
   }
 
   private setLoading(loading: boolean): void {
@@ -118,8 +254,15 @@ export class AutoCopyApp {
     this.resultsContainer.innerHTML = '';
   }
 
-  private showResults(results: any[]): void {
+  private showResults(results: any[], provider?: string): void {
     this.resultsContainer.innerHTML = '';
+    
+    if (provider) {
+      const providerInfo = document.createElement('div');
+      providerInfo.className = 'provider-info-badge';
+      providerInfo.innerHTML = `<span>模型: ${provider}</span>`;
+      this.resultsContainer.appendChild(providerInfo);
+    }
     
     results.forEach((result, index) => {
       const card = this.createResultCard(result, index + 1);
@@ -139,13 +282,11 @@ export class AutoCopyApp {
         <span class="result-title">版本 ${index}</span>
         <div class="result-meta">
           <span>字数: ${result.wordCount}</span>
-          <span>${result.metadata.hasEmoji ? '含表情' : '无表情'}</span>
-          <span>${result.metadata.hasParagraphs ? '分段' : '不分段'}</span>
         </div>
       </div>
       <div class="result-content">${this.escapeHtml(result.content)}</div>
       <div class="result-actions">
-        <button class="btn-copy" data-content="${this.escapeHtml(result.content)}">复制文案</button>
+        <button class="btn-copy" data-content="${this.escapeHtml(result.content)}">复制</button>
       </div>
     `;
 
@@ -166,7 +307,7 @@ export class AutoCopyApp {
       await navigator.clipboard.writeText(text);
       
       const originalText = button.textContent;
-      button.textContent = '已复制!';
+      button.textContent = '已复制';
       button.classList.add('copied');
       
       setTimeout(() => {
@@ -175,19 +316,14 @@ export class AutoCopyApp {
       }, 2000);
     } catch (error) {
       console.error('Copy failed:', error);
-      button.textContent = '复制失败';
+      button.textContent = '失败';
       setTimeout(() => {
-        button.textContent = '复制文案';
+        button.textContent = '复制';
       }, 2000);
     }
   }
 
   private showError(message: string): void {
-    const existingError = this.resultsSection.querySelector('.error-message');
-    if (existingError) {
-      existingError.remove();
-    }
-
     const errorDiv = document.createElement('div');
     errorDiv.className = 'error-message';
     errorDiv.textContent = message;

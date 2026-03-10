@@ -3,110 +3,155 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AutoCopy - 社交媒体文案生成器</title>
+  <title>AutoCopy - 智能文案生成</title>
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
   <div class="container">
     <header class="header">
-      <h1>✨ AutoCopy</h1>
-      <p class="subtitle">智能社交媒体文案生成器</p>
+      <div class="header-content">
+        <div class="header-title">
+          <h1>AutoCopy</h1>
+          <p class="subtitle">智能文案生成工具</p>
+        </div>
+        <button id="openProviderConfig" class="btn-settings" aria-label="模型配置">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </button>
+      </div>
+      <div class="current-provider" id="currentProviderInfo">
+        <span id="currentProviderName">加载中...</span>
+      </div>
     </header>
 
     <main class="main">
       <form id="generateForm" class="form">
-        <div class="form-section">
-          <h2>基本信息</h2>
-          
-          <div class="form-row">
-            <div class="form-group">
-              <label for="articleType">文章类型</label>
-              <select id="articleType" name="articleType" required>
-                <option value="">请选择...</option>
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="articleType">文章类型</label>
+            <div class="input-with-custom">
+              <select id="articleType" name="articleType">
+                <option value="推广文案">推广文案</option>
+                <option value="产品介绍">产品介绍</option>
+                <option value="活动宣传">活动宣传</option>
+                <option value="品牌故事">品牌故事</option>
+                <option value="知识分享">知识分享</option>
+                <option value="情感表达">情感表达</option>
+                <option value="新闻资讯">新闻资讯</option>
+                <option value="custom">自定义...</option>
               </select>
-            </div>
-            
-            <div class="form-group">
-              <label for="tone">语气风格</label>
-              <select id="tone" name="tone" required>
-                <option value="">请选择...</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label for="platform">目标平台</label>
-              <select id="platform" name="platform">
-                <option value="">请选择...</option>
-              </select>
-            </div>
-            
-            <div class="form-group">
-              <label for="wordCount">字数要求</label>
-              <input type="number" id="wordCount" name="wordCount" 
-                     min="10" max="2000" value="200" required>
-            </div>
-          </div>
-        </div>
-
-        <div class="form-section">
-          <h2>内容设置</h2>
-          
-          <div class="form-group">
-            <label for="content">主要内容描述 <span class="required">*</span></label>
-            <textarea id="content" name="content" rows="4" 
-                      placeholder="请简要描述您想要生成的文案内容..." required></textarea>
-          </div>
-
-          <div class="form-group">
-            <label for="keywords">关键词（可选）</label>
-            <input type="text" id="keywords" name="keywords" 
-                   placeholder="多个关键词用逗号分隔，如：智能手表,健康,运动">
-          </div>
-
-          <div class="form-group">
-            <label for="additionalRequirements">其他要求（可选）</label>
-            <textarea id="additionalRequirements" name="additionalRequirements" 
-                      rows="2" placeholder="如有特殊要求请在此说明..."></textarea>
-          </div>
-        </div>
-
-        <div class="form-section">
-          <h2>格式选项</h2>
-          
-          <div class="form-row checkbox-row">
-            <div class="checkbox-group">
-              <input type="checkbox" id="useParagraphs" name="useParagraphs" checked>
-              <label for="useParagraphs">自动分段</label>
-            </div>
-            
-            <div class="checkbox-group">
-              <input type="checkbox" id="useEmoji" name="useEmoji">
-              <label for="useEmoji">添加表情符号</label>
+              <input type="text" id="articleTypeCustom" name="articleTypeCustom" 
+                     placeholder="输入自定义类型" style="display: none;" />
             </div>
           </div>
 
           <div class="form-group">
-            <label for="count">生成版本数量</label>
-            <select id="count" name="count">
-              <option value="1">1 个版本</option>
-              <option value="2">2 个版本</option>
-              <option value="3" selected>3 个版本</option>
-              <option value="5">5 个版本</option>
+            <label for="tone">语气风格</label>
+            <select id="tone" name="tone">
+              <option value="正式">正式</option>
+              <option value="轻松" selected>轻松</option>
+              <option value="幽默">幽默</option>
+              <option value="专业">专业</option>
+              <option value="亲切">亲切</option>
+              <option value="激情">激情</option>
+              <option value="温暖">温暖</option>
+              <option value="客观">客观</option>
             </select>
+          </div>
+
+          <div class="form-group">
+            <label for="wordCount">字数要求</label>
+            <input type="number" id="wordCount" name="wordCount" 
+                   min="10" max="2000" value="200" />
+          </div>
+
+          <div class="form-group">
+            <label for="provider">使用模型</label>
+            <select id="provider" name="provider">
+              <option value="">使用默认模型</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group full-width">
+          <label for="content">内容描述</label>
+          <textarea id="content" name="content" rows="3" 
+                    placeholder="描述您想要生成的文案内容..." required></textarea>
+        </div>
+
+        <div class="form-group full-width">
+          <label for="keywords">关键词</label>
+          <input type="text" id="keywords" name="keywords" 
+                 placeholder="输入关键词，自动识别（支持中英文、逗号或空格分隔）" />
+          <div id="keywordsTags" class="keywords-tags"></div>
+          <small class="hint" id="keywordsHint"></small>
+        </div>
+
+        <div class="form-group full-width">
+          <label for="additionalRequirements">其他要求</label>
+          <textarea id="additionalRequirements" name="additionalRequirements" 
+                    rows="2" placeholder="如有特殊要求请在此说明..."></textarea>
+        </div>
+
+        <div class="form-row-inline">
+          <div class="form-group">
+            <label>格式选项</label>
+            <div class="checkbox-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="useParagraphs" name="useParagraphs" checked>
+                <span class="checkbox-custom"></span>
+                自动分段
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="useEmoji" name="useEmoji">
+                <span class="checkbox-custom"></span>
+                添加表情
+              </label>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>生成版本</label>
+            <div class="radio-group" id="countRadioGroup">
+              <label class="radio-label">
+                <input type="radio" name="count" value="1">
+                <span class="radio-custom"></span>
+                1
+              </label>
+              <label class="radio-label">
+                <input type="radio" name="count" value="2">
+                <span class="radio-custom"></span>
+                2
+              </label>
+              <label class="radio-label">
+                <input type="radio" name="count" value="3" checked>
+                <span class="radio-custom"></span>
+                3
+              </label>
+              <label class="radio-label">
+                <input type="radio" name="count" value="4">
+                <span class="radio-custom"></span>
+                4
+              </label>
+              <label class="radio-label">
+                <input type="radio" name="count" value="5">
+                <span class="radio-custom"></span>
+                5
+              </label>
+            </div>
           </div>
         </div>
 
         <div class="form-actions">
           <button type="submit" id="submitBtn" class="btn btn-primary">
             <span class="btn-text">生成文案</span>
-            <span class="btn-loading" style="display: none;">
+            <span class="btn-loading">
               <span class="spinner"></span>
-              生成中...
+              生成中
             </span>
           </button>
-          <button type="reset" class="btn btn-secondary">重置</button>
         </div>
       </form>
 
@@ -115,12 +160,8 @@
         <div id="resultsContainer" class="results-container"></div>
       </section>
     </main>
-
-    <footer class="footer">
-      <p>Powered by DeepSeek AI</p>
-    </footer>
   </div>
 
-  <script src="/js/app.js"></script>
+  <script type="module" src="/js/app.js"></script>
 </body>
 </html>

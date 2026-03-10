@@ -1,4 +1,10 @@
-export type AIProvider = 'deepseek' | 'openai' | 'anthropic';
+export type AIProvider = 
+  | 'deepseek' 
+  | 'openai' 
+  | 'anthropic'
+  | 'wenxin'
+  | 'qwen'
+  | 'gemini';
 
 export interface AIMessage {
   role: 'system' | 'user' | 'assistant';
@@ -27,6 +33,7 @@ export interface AIUsage {
 
 export interface AIProviderConfig {
   apiKey: string;
+  secretKey?: string;
   baseUrl?: string;
   model?: string;
   defaultTemperature?: number;

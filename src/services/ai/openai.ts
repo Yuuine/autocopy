@@ -6,7 +6,7 @@ import type {
 } from '../../types';
 import { BaseAIService } from './base';
 
-interface DeepSeekChatResponse {
+interface OpenAIChatResponse {
   id: string;
   object: string;
   created: number;
@@ -26,7 +26,7 @@ interface DeepSeekChatResponse {
   };
 }
 
-interface DeepSeekError {
+interface OpenAIError {
   error: {
     message: string;
     type: string;
@@ -34,9 +34,8 @@ interface DeepSeekError {
   };
 }
 
-export class DeepSeekService extends BaseAIService {
-  protected readonly provider: AIProvider = 'deepseek';
-  private readonly defaultBaseUrl = 'https://api.deepseek.com';
+export class OpenAIService extends BaseAIService {
+  protected readonly provider: AIProvider = 'openai';
 
   constructor(config: AIProviderConfig) {
     super(config);
@@ -44,8 +43,7 @@ export class DeepSeekService extends BaseAIService {
   }
 
   async chat(request: AIRequest): Promise<AIResponse> {
-    const baseUrl = this.config.baseUrl ?? this.defaultBaseUrl;
-    const url = `${baseUrl}/chat/completions`;
+    const url = `${this.config.baseUrl ?? 'https://api.openai.com/v1'}/chat/completions`;
     
     const body = {
       model: this.getModel(request),
@@ -65,22 +63,22 @@ export class DeepSeekService extends BaseAIService {
       });
 
       if (!httpResponse.ok) {
-        const errorData = await httpResponse.json() as DeepSeekError;
+        const errorData = await httpResponse.json() as OpenAIError;
         throw new Error(
-          `DeepSeek API error: ${errorData.error?.message ?? httpResponse.statusText}`
+          `OpenAI API error: ${errorData.error?.message ?? httpResponse.statusText}`
         );
       }
 
-      const data = await httpResponse.json() as DeepSeekChatResponse;
+      const data = await httpResponse.json() as OpenAIChatResponse;
       
       const firstChoice = data.choices[0];
       if (!firstChoice) {
-        throw new Error('No response from DeepSeek API');
+        throw new Error('No response from OpenAI API');
       }
 
       const content = firstChoice.message.content;
       if (content === null) {
-        throw new Error('No content in DeepSeek API response');
+        throw new Error('No content in OpenAI API response');
       }
 
       const usage = data.usage ? {
@@ -102,9 +100,9 @@ export class DeepSeekService extends BaseAIService {
       return aiResponse;
     } catch (error) {
       if (error instanceof Error) {
-        throw new Error(`DeepSeek service error: ${error.message}`);
+        throw new Error(`OpenAI service error: ${error.message}`);
       }
-      throw new Error('Unknown error occurred in DeepSeek service');
+      throw new Error('Unknown error occurred in OpenAI service');
     }
   }
 }

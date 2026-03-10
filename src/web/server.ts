@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import express, { Express, Request, Response } from 'express';
 import path from 'path';
-import { copywritingRouter } from './routes';
+import { copywritingRouter, providersRouter } from './routes';
 import { errorHandler } from './middleware';
 
 const app: Express = express();
@@ -17,6 +17,7 @@ app.get('/api/health', (_req: Request, res: Response): void => {
 });
 
 app.use('/api/copywriting', copywritingRouter);
+app.use('/api/providers', providersRouter);
 
 app.get('/', (_req: Request, res: Response): void => {
   res.sendFile(path.join(__dirname, '../../public/index.html'));
