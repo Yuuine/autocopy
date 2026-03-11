@@ -49,12 +49,29 @@ export class WenxinService extends BaseAIService {
       body['system'] = systemMessage.content;
     }
 
-    if (request.temperature !== undefined) {
-      body['temperature'] = request.temperature;
+    const temperature = this.getTemperature(request);
+    if (temperature !== undefined) {
+      body['temperature'] = temperature;
     }
 
-    if (request.maxTokens !== undefined) {
-      body['max_output_tokens'] = request.maxTokens;
+    const maxTokens = this.getMaxTokens(request);
+    if (maxTokens !== undefined) {
+      body['max_output_tokens'] = maxTokens;
+    }
+
+    const topP = this.getTopP(request);
+    if (topP !== undefined) {
+      body['top_p'] = topP;
+    }
+
+    const presencePenalty = this.getPresencePenalty(request);
+    if (presencePenalty !== undefined) {
+      body['presence_penalty'] = presencePenalty;
+    }
+
+    const frequencyPenalty = this.getFrequencyPenalty(request);
+    if (frequencyPenalty !== undefined) {
+      body['frequency_penalty'] = frequencyPenalty;
     }
 
     try {

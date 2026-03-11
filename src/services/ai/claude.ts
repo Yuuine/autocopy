@@ -50,15 +50,25 @@ export class ClaudeService extends BaseAIService {
         role: m.role,
         content: m.content,
       })),
-      max_tokens: this.getMaxTokens(request),
     };
+
+    const maxTokens = this.getMaxTokens(request);
+    if (maxTokens !== undefined) {
+      body['max_tokens'] = maxTokens;
+    }
 
     if (systemMessage) {
       body['system'] = systemMessage.content;
     }
 
-    if (request.temperature !== undefined) {
-      body['temperature'] = request.temperature;
+    const temperature = this.getTemperature(request);
+    if (temperature !== undefined) {
+      body['temperature'] = temperature;
+    }
+
+    const topP = this.getTopP(request);
+    if (topP !== undefined) {
+      body['top_p'] = topP;
     }
 
     try {

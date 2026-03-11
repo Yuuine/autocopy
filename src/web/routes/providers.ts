@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import type { AIProvider } from '../../types';
+import type { AIProvider, ModelParameters } from '../../types';
 import { AIServiceFactory } from '../../services/ai';
 import {
   setProviderConfig,
@@ -10,6 +10,11 @@ import {
   hasProviderConfig,
   getAllProviderSummaries,
   getProviderConfigSummary,
+  setProviderParameters,
+  getProviderParameters,
+  setGlobalParameters,
+  getGlobalParameters,
+  getEffectiveParameters,
 } from '../../utils/userConfig';
 import { validateApiKeyFormat } from '../../utils/encryption';
 import { createError } from '../middleware';
@@ -68,16 +73,21 @@ const PROVIDER_INFO: Record<AIProvider, {
 };
 
 router.get('/', (_req: Request, res: Response): void => {
-  const providers = Object.entries(PROVIDER_INFO).map(([key, info]) => ({
-    id: key as AIProvider,
-    ...info,
-    configured: hasProviderConfig(key as AIProvider),
-  }));
+  const providers = Object.entries(PROVIDER_INFO).map(([key, info]) => {
+    const summary = getProviderConfigSummary(key as AIProvider);
+    return {
+      id: key as AIProvider,
+      ...info,
+      configured: hasProviderConfig(key as AIProvider),
+      parameters: summary?.parameters,
+    };
+  });
 
   res.json({
     providers,
     defaultProvider: getDefaultProvider(),
     enabledProviders: getEnabledProviders(),
+    globalParameters: getGlobalParameters(),
   });
 });
 
@@ -99,7 +109,7 @@ router.get('/:provider', (req: Request, res: Response): void => {
 
 router.post('/:provider', (req: Request, res: Response): void => {
   const provider = req.params['provider'] as AIProvider;
-  const { apiKey, secretKey, baseUrl, model } = req.body;
+  const { apiKey, secretKey, baseUrl, model, parameters } = req.body;
 
   if (!PROVIDER_INFO[provider]) {
     throw createError('不支持的模型提供商', 400);
@@ -121,6 +131,7 @@ router.post('/:provider', (req: Request, res: Response): void => {
     secretKey,
     baseUrl,
     model: model ?? PROVIDER_INFO[provider].defaultModel,
+    parameters,
   });
 
   res.json({
@@ -131,6 +142,7 @@ router.post('/:provider', (req: Request, res: Response): void => {
       enabled: config.enabled,
       apiKeyMasked: config.apiKey,
       model: config.model,
+      parameters: config.parameters,
     },
   });
 });
@@ -217,6 +229,82 @@ router.post('/:provider/validate', async (req: Request, res: Response): Promise<
       message: `API 密钥验证失败: ${message}`,
     });
   }
+});
+
+router.get('/:provider/parameters', (req: Request, res: Response): void => {
+  const provider = req.params['provider'] as AIProvider;
+  
+  if (!PROVIDER_INFO[provider]) {
+    throw createError('不支持的模型提供商', 400);
+  }
+
+  const parameters = getProviderParameters(provider);
+  
+  res.json({
+    success: true,
+    parameters,
+  });
+});
+
+router.put('/:provider/parameters', (req: Request, res: Response): void => {
+  const provider = req.params['provider'] as AIProvider;
+  const parameters = req.body as ModelParameters;
+  
+  if (!PROVIDER_INFO[provider]) {
+    throw createError('不支持的模型提供商', 400);
+  }
+
+  if (!hasProviderConfig(provider)) {
+    throw createError('该模型未配置，请先配置 API 密钥', 400);
+  }
+
+  const success = setProviderParameters(provider, parameters);
+  
+  if (!success) {
+    throw createError('保存参数失败', 500);
+  }
+
+  res.json({
+    success: true,
+    message: `${PROVIDER_INFO[provider].name} 参数已保存`,
+    parameters,
+  });
+});
+
+router.get('/parameters/global', (_req: Request, res: Response): void => {
+  const parameters = getGlobalParameters();
+  
+  res.json({
+    success: true,
+    parameters,
+  });
+});
+
+router.put('/parameters/global', (req: Request, res: Response): void => {
+  const parameters = req.body as ModelParameters;
+  
+  setGlobalParameters(parameters);
+  
+  res.json({
+    success: true,
+    message: '全局参数已保存',
+    parameters,
+  });
+});
+
+router.get('/:provider/parameters/effective', (req: Request, res: Response): void => {
+  const provider = req.params['provider'] as AIProvider;
+  
+  if (!PROVIDER_INFO[provider]) {
+    throw createError('不支持的模型提供商', 400);
+  }
+
+  const parameters = getEffectiveParameters(provider);
+  
+  res.json({
+    success: true,
+    parameters,
+  });
 });
 
 router.get('/summaries', (_req: Request, res: Response): void => {

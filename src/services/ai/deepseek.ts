@@ -47,12 +47,7 @@ export class DeepSeekService extends BaseAIService {
     const baseUrl = this.config.baseUrl ?? this.defaultBaseUrl;
     const url = `${baseUrl}/chat/completions`;
     
-    const body = {
-      model: this.getModel(request),
-      messages: request.messages,
-      temperature: this.getTemperature(request),
-      max_tokens: this.getMaxTokens(request),
-    };
+    const body = this.buildRequestBody(request);
 
     try {
       const httpResponse = await fetch(url, {

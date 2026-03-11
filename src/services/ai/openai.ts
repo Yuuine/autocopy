@@ -36,6 +36,7 @@ interface OpenAIError {
 
 export class OpenAIService extends BaseAIService {
   protected readonly provider: AIProvider = 'openai';
+  private readonly defaultBaseUrl = 'https://api.openai.com';
 
   constructor(config: AIProviderConfig) {
     super(config);
@@ -43,14 +44,10 @@ export class OpenAIService extends BaseAIService {
   }
 
   async chat(request: AIRequest): Promise<AIResponse> {
-    const url = `${this.config.baseUrl ?? 'https://api.openai.com/v1'}/chat/completions`;
+    const baseUrl = this.config.baseUrl ?? this.defaultBaseUrl;
+    const url = `${baseUrl}/v1/chat/completions`;
     
-    const body = {
-      model: this.getModel(request),
-      messages: request.messages,
-      temperature: this.getTemperature(request),
-      max_tokens: this.getMaxTokens(request),
-    };
+    const body = this.buildRequestBody(request);
 
     try {
       const httpResponse = await fetch(url, {

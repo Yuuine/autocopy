@@ -2,6 +2,7 @@ import { Modal } from './Modal.js';
 import { Button } from './Button.js';
 import { FormField } from './FormField.js';
 import { toast } from './Toast.js';
+import { ModelParametersPanel, ModelParameters } from './ModelParametersPanel.js';
 
 export interface ProviderInfo {
   id: string;
@@ -11,6 +12,7 @@ export interface ProviderInfo {
   requiresSecretKey: boolean;
   models: string[];
   configured: boolean;
+  parameters?: ModelParameters;
 }
 
 export interface ProviderConfigOptions {
@@ -79,6 +81,11 @@ export class ProviderConfigPanel {
           <button class="btn btn-sm btn-configure" data-provider="${provider.id}" type="button">
             ${provider.configured ? '修改配置' : '添加配置'}
           </button>
+          ${provider.configured ? `
+            <button class="btn btn-sm btn-parameters" data-provider="${provider.id}" type="button" title="模型参数">
+              参数
+            </button>
+          ` : ''}
           ${provider.configured && this.defaultProvider !== provider.id ? `
             <button class="btn btn-sm btn-set-default" data-provider="${provider.id}" type="button">
               设为默认
@@ -107,6 +114,14 @@ export class ProviderConfigPanel {
       });
     });
 
+    this.listContainer.querySelectorAll('.btn-parameters').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const providerId = (e.currentTarget as HTMLElement).dataset['provider'];
+        if (providerId) this.showParametersPanel(providerId);
+      });
+    });
+
     this.listContainer.querySelectorAll('.btn-set-default').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
@@ -122,6 +137,24 @@ export class ProviderConfigPanel {
         if (providerId) this.removeProvider(providerId);
       });
     });
+  }
+
+  private showParametersPanel(providerId: string): void {
+    const provider = this.providers.find(p => p.id === providerId);
+    if (!provider) return;
+
+    const panel = new ModelParametersPanel({
+      providerId: provider.id,
+      providerName: provider.name,
+      parameters: provider.parameters,
+      onSave: async (params) => {
+        await this.loadProviders();
+        this.renderProviderList();
+        this.emitChange();
+      },
+    });
+
+    panel.open();
   }
 
   private showForm(providerId: string): void {

@@ -16,6 +16,9 @@ export interface AIRequest {
   temperature?: number;
   maxTokens?: number;
   model?: string;
+  topP?: number;
+  presencePenalty?: number;
+  frequencyPenalty?: number;
 }
 
 export interface AIResponse {
@@ -31,6 +34,14 @@ export interface AIUsage {
   totalTokens: number;
 }
 
+export interface ModelParameters {
+  temperature?: number;
+  maxTokens?: number;
+  topP?: number;
+  presencePenalty?: number;
+  frequencyPenalty?: number;
+}
+
 export interface AIProviderConfig {
   apiKey: string;
   secretKey?: string;
@@ -38,6 +49,7 @@ export interface AIProviderConfig {
   model?: string;
   defaultTemperature?: number;
   defaultMaxTokens?: number;
+  parameters?: ModelParameters;
 }
 
 export interface AIServiceError {

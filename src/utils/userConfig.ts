@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import type { AIProvider } from '../types';
+import type { AIProvider, ModelParameters } from '../types';
 import type { CustomTone } from '../types/copywriting';
 import { encrypt, decrypt, hashApiKey } from './encryption';
 
@@ -10,6 +10,7 @@ export interface UserProviderConfig {
   secretKey?: string;
   baseUrl?: string;
   model?: string;
+  parameters?: ModelParameters;
   enabled: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -19,6 +20,7 @@ export interface UserConfig {
   defaultProvider: AIProvider;
   providers: Record<AIProvider, UserProviderConfig>;
   customTones: CustomTone[];
+  globalParameters?: ModelParameters;
 }
 
 const CONFIG_DIR = path.join(process.cwd(), 'data');
@@ -73,6 +75,7 @@ export function setProviderConfig(
     secretKey?: string;
     baseUrl?: string;
     model?: string;
+    parameters?: ModelParameters;
   }
 ): {
   provider: AIProvider;
@@ -81,6 +84,7 @@ export function setProviderConfig(
   secretKey?: string;
   baseUrl?: string;
   model?: string;
+  parameters?: ModelParameters;
   createdAt: Date;
   updatedAt: Date;
 } {
@@ -105,6 +109,9 @@ export function setProviderConfig(
   if (options?.model) {
     providerConfigBase.model = options.model;
   }
+  if (options?.parameters) {
+    providerConfigBase.parameters = options.parameters;
+  }
   
   config.providers[provider] = providerConfigBase;
   
@@ -121,6 +128,7 @@ export function setProviderConfig(
     secretKey?: string;
     baseUrl?: string;
     model?: string;
+    parameters?: ModelParameters;
     createdAt: Date;
     updatedAt: Date;
   } = {
@@ -139,6 +147,9 @@ export function setProviderConfig(
   }
   if (options?.model) {
     result.model = options.model;
+  }
+  if (options?.parameters) {
+    result.parameters = options.parameters;
   }
   
   return result;
@@ -169,6 +180,7 @@ export function getDecryptedProviderConfig(provider: AIProvider): {
   secretKey?: string;
   baseUrl?: string;
   model?: string;
+  parameters?: ModelParameters;
 } | null {
   const config = loadUserConfig();
   const providerConfig = config.providers[provider];
@@ -177,7 +189,13 @@ export function getDecryptedProviderConfig(provider: AIProvider): {
     return null;
   }
   
-  const result: { apiKey: string; secretKey?: string; baseUrl?: string; model?: string } = {
+  const result: { 
+    apiKey: string; 
+    secretKey?: string; 
+    baseUrl?: string; 
+    model?: string;
+    parameters?: ModelParameters;
+  } = {
     apiKey: decrypt(providerConfig.apiKey),
   };
   
@@ -190,8 +208,61 @@ export function getDecryptedProviderConfig(provider: AIProvider): {
   if (providerConfig.model) {
     result.model = providerConfig.model;
   }
+  if (providerConfig.parameters) {
+    result.parameters = providerConfig.parameters;
+  }
   
   return result;
+}
+
+export function setProviderParameters(
+  provider: AIProvider, 
+  parameters: ModelParameters
+): boolean {
+  const config = loadUserConfig();
+  const providerConfig = config.providers[provider];
+  
+  if (!providerConfig) {
+    return false;
+  }
+  
+  providerConfig.parameters = parameters;
+  providerConfig.updatedAt = new Date();
+  
+  saveUserConfig(config);
+  return true;
+}
+
+export function getProviderParameters(provider: AIProvider): ModelParameters | null {
+  const config = loadUserConfig();
+  const providerConfig = config.providers[provider];
+  
+  if (!providerConfig) {
+    return null;
+  }
+  
+  return providerConfig.parameters || null;
+}
+
+export function setGlobalParameters(parameters: ModelParameters): void {
+  const config = loadUserConfig();
+  config.globalParameters = parameters;
+  saveUserConfig(config);
+}
+
+export function getGlobalParameters(): ModelParameters | null {
+  const config = loadUserConfig();
+  return config.globalParameters || null;
+}
+
+export function getEffectiveParameters(provider: AIProvider): ModelParameters {
+  const config = loadUserConfig();
+  const providerConfig = config.providers[provider];
+  
+  return {
+    ...config.globalParameters,
+    ...providerConfig?.parameters,
+  };
 }
 
 export function removeProviderConfig(provider: AIProvider): boolean {
@@ -261,6 +332,7 @@ export function getProviderConfigSummary(provider: AIProvider): {
   apiKeyMasked: string;
   model?: string;
   baseUrl?: string;
+  parameters?: ModelParameters;
 } | null {
   const config = loadUserConfig();
   const providerConfig = config.providers[provider];
@@ -269,7 +341,14 @@ export function getProviderConfigSummary(provider: AIProvider): {
     return null;
   }
   
-  const result: { provider: AIProvider; enabled: boolean; apiKeyMasked: string; model?: string; baseUrl?: string } = {
+  const result: { 
+    provider: AIProvider; 
+    enabled: boolean; 
+    apiKeyMasked: string; 
+    model?: string; 
+    baseUrl?: string;
+    parameters?: ModelParameters;
+  } = {
     provider,
     enabled: providerConfig.enabled,
     apiKeyMasked: maskApiKey(providerConfig.apiKey),
@@ -281,6 +360,9 @@ export function getProviderConfigSummary(provider: AIProvider): {
   if (providerConfig.baseUrl) {
     result.baseUrl = providerConfig.baseUrl;
   }
+  if (providerConfig.parameters) {
+    result.parameters = providerConfig.parameters;
+  }
   
   return result;
 }
@@ -291,12 +373,20 @@ export function getAllProviderSummaries(): Array<{
   apiKeyMasked: string;
   model?: string;
   baseUrl?: string;
+  parameters?: ModelParameters;
 }> {
   const config = loadUserConfig();
   
   return Object.keys(config.providers).map(provider => {
     const pc = config.providers[provider as AIProvider];
-    const result: { provider: AIProvider; enabled: boolean; apiKeyMasked: string; model?: string; baseUrl?: string } = {
+    const result: { 
+      provider: AIProvider; 
+      enabled: boolean; 
+      apiKeyMasked: string; 
+      model?: string; 
+      baseUrl?: string;
+      parameters?: ModelParameters;
+    } = {
       provider: provider as AIProvider,
       enabled: pc?.enabled ?? false,
       apiKeyMasked: maskApiKey(pc?.apiKey ?? ''),
@@ -307,6 +397,9 @@ export function getAllProviderSummaries(): Array<{
     }
     if (pc?.baseUrl) {
       result.baseUrl = pc.baseUrl;
+    }
+    if (pc?.parameters) {
+      result.parameters = pc.parameters;
     }
     
     return result;
