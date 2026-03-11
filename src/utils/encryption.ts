@@ -7,7 +7,25 @@ const IV_LENGTH = 16;
 const AUTH_TAG_LENGTH = 16;
 const SALT_LENGTH = 32;
 
-const SECRET_FILE = path.join(process.cwd(), 'data', '.secret');
+function getDataDir(): string {
+  const cwdDataDir = path.join(process.cwd(), 'data');
+  
+  if (fs.existsSync(cwdDataDir)) {
+    return cwdDataDir;
+  }
+  
+  const scriptDataDir = path.resolve(__dirname, '..', '..', 'data');
+  
+  if (fs.existsSync(scriptDataDir)) {
+    return scriptDataDir;
+  }
+  
+  return cwdDataDir;
+}
+
+function getSecretFilePath(): string {
+  return path.join(getDataDir(), '.secret');
+}
 
 function getEncryptionKey(): Buffer {
   const secret = getOrCreateSecret();
@@ -15,9 +33,11 @@ function getEncryptionKey(): Buffer {
 }
 
 function getOrCreateSecret(): string {
+  const secretFile = getSecretFilePath();
+  
   try {
-    if (fs.existsSync(SECRET_FILE)) {
-      return fs.readFileSync(SECRET_FILE, 'utf8').trim();
+    if (fs.existsSync(secretFile)) {
+      return fs.readFileSync(secretFile, 'utf8').trim();
     }
   } catch {
     // Ignore read errors
@@ -26,11 +46,11 @@ function getOrCreateSecret(): string {
   const newSecret = crypto.randomBytes(32).toString('hex');
   
   try {
-    const dir = path.dirname(SECRET_FILE);
+    const dir = path.dirname(secretFile);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    fs.writeFileSync(SECRET_FILE, newSecret, 'utf8');
+    fs.writeFileSync(secretFile, newSecret, 'utf8');
   } catch {
     console.warn('Warning: Could not save encryption secret to file.');
   }

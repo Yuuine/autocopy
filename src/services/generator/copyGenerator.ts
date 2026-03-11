@@ -88,8 +88,7 @@ export class CopyGenerator {
       const versions = splitByVersions(cleanedContent);
       
       if (versions.length === 1 && count > 1) {
-        const results: CopywritingResult[] = [];
-        for (let i = 0; i < count; i++) {
+        const promises = Array.from({ length: count }, (_, i) => {
           const modifiedUserPrompt = `${userPrompt}\n\n## 特别说明\n这是第 ${i + 1} 个版本，请尝试不同的切入角度和表达方式。`;
           const individualRequest: import('../../types').AIRequest = {
             messages: [
@@ -103,9 +102,12 @@ export class CopyGenerator {
           if (maxTokens !== undefined) {
             individualRequest.maxTokens = maxTokens;
           }
-          const individualResponse = await this.aiService.chat(individualRequest);
-          results.push(this.createResultFromContent(cleanResponse(individualResponse.content)));
-        }
+          return this.aiService.chat(individualRequest).then(response => 
+            this.createResultFromContent(cleanResponse(response.content))
+          );
+        });
+        
+        const results = await Promise.all(promises);
         return { success: true, results };
       }
 
@@ -207,9 +209,8 @@ export class CopyGenerator {
     options?: GenerationOptions
   ): Promise<CopywritingResult[]> {
     const count = options?.count ?? 3;
-    const results: CopywritingResult[] = [];
-
-    for (let i = 0; i < count; i++) {
+    
+    const promises = Array.from({ length: count }, (_, i) => {
       const modifiedRequest: CopywritingRequest = {
         ...request,
         additionalRequirements: [
@@ -218,11 +219,10 @@ export class CopyGenerator {
         ].filter(Boolean).join('\n'),
       };
 
-      const result = await this.generateSingle(modifiedRequest, options);
-      results.push(result);
-    }
+      return this.generateSingle(modifiedRequest, options);
+    });
 
-    return results;
+    return Promise.all(promises);
   }
 
   private createResult(

@@ -10,7 +10,7 @@ import type {
 } from './types';
 import { AIServiceFactory } from './services/ai';
 import { CopyGenerator } from './services/generator';
-import { getInstanceDecrypted, getDefaultInstanceId } from './utils/userConfig';
+import { getInstance, getDefaultInstanceId } from './utils/userConfig';
 
 export class AutoCopy {
   private instanceId: ProviderInstanceId;
@@ -29,32 +29,22 @@ export class AutoCopy {
       throw new Error('未配置任何模型实例，请先在前端配置 API 密钥');
     }
     
-    const config = getInstanceDecrypted(effectiveInstanceId);
+    const instance = getInstance(effectiveInstanceId);
     
-    if (!config) {
+    if (!instance) {
       throw new Error(`模型实例 ${effectiveInstanceId} 未配置或已禁用`);
     }
     
-    const instance = getInstanceDecrypted(effectiveInstanceId);
-    if (!instance) {
-      throw new Error(`无法获取模型实例 ${effectiveInstanceId} 的配置`);
-    }
-    
     const serviceConfig: AIProviderConfig = {
-      apiKey: config.apiKey,
-      model: config.model ?? '',
+      apiKey: instance.apiKey,
+      model: instance.model ?? '',
     };
     
-    if (config.baseUrl) {
-      serviceConfig.baseUrl = config.baseUrl;
+    if (instance.baseUrl) {
+      serviceConfig.baseUrl = instance.baseUrl;
     }
     
-    const instanceData = await import('./utils/userConfig').then(m => m.getInstance(effectiveInstanceId));
-    if (!instanceData) {
-      throw new Error(`无法获取模型实例 ${effectiveInstanceId}`);
-    }
-    
-    const aiService = AIServiceFactory.createService(instanceData.provider, serviceConfig);
+    const aiService = AIServiceFactory.createService(instance.provider, serviceConfig);
     const generator = new CopyGenerator(aiService);
     
     return generator.generate(request, options);
@@ -90,7 +80,7 @@ export {
 export { AIServiceFactory } from './services/ai';
 export { CopyGenerator } from './services/generator';
 export { 
-  getInstanceDecrypted, 
+  getInstance, 
   addInstance,
   updateInstance,
   removeInstance,

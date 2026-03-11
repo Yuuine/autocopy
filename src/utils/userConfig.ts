@@ -11,8 +11,27 @@ export interface UserConfig {
   globalParameters?: ModelParameters;
 }
 
-const CONFIG_DIR = path.join(process.cwd(), 'data');
+function getDataDir(): string {
+  const cwdDataDir = path.join(process.cwd(), 'data');
+  
+  if (fs.existsSync(cwdDataDir)) {
+    return cwdDataDir;
+  }
+  
+  const scriptDataDir = path.resolve(__dirname, '..', '..', 'data');
+  
+  if (fs.existsSync(scriptDataDir)) {
+    return scriptDataDir;
+  }
+  
+  return cwdDataDir;
+}
+
+const CONFIG_DIR = getDataDir();
 const CONFIG_FILE = path.join(CONFIG_DIR, 'user-config.json');
+
+let configSavePromise: Promise<void> | null = null;
+let pendingConfig: UserConfig | null = null;
 
 function ensureConfigDir(): void {
   if (!fs.existsSync(CONFIG_DIR)) {
@@ -47,13 +66,29 @@ export function loadUserConfig(): UserConfig {
 }
 
 export function saveUserConfig(config: UserConfig): void {
-  try {
-    ensureConfigDir();
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), 'utf8');
-  } catch (error) {
-    console.error('Error saving user config:', error);
-    throw new Error('Failed to save configuration');
+  pendingConfig = config;
+  
+  if (configSavePromise) {
+    return;
   }
+  
+  configSavePromise = (async () => {
+    while (pendingConfig) {
+      const configToSave = pendingConfig;
+      pendingConfig = null;
+      
+      try {
+        ensureConfigDir();
+        fs.writeFileSync(CONFIG_FILE, JSON.stringify(configToSave, null, 2), 'utf8');
+      } catch (error) {
+        console.error('Error saving user config:', error);
+        configSavePromise = null;
+        throw new Error('Failed to save configuration');
+      }
+    }
+  })().finally(() => {
+    configSavePromise = null;
+  });
 }
 
 export function generateInstanceId(provider: AIProvider): ProviderInstanceId {
