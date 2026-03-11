@@ -70,6 +70,22 @@ const PROVIDER_INFO: Record<AIProvider, {
     requiresSecretKey: false,
     models: ['gemini-pro', 'gemini-pro-vision'],
   },
+  moonshot: {
+    name: 'Kimi (Moonshot)',
+    description: 'Moonshot AI Kimi 系列模型',
+    defaultModel: 'kimi-k2-turbo-preview',
+    requiresSecretKey: false,
+    models: [
+      'kimi-k2.5',
+      'kimi-k2-turbo-preview',
+      'kimi-k2-thinking-turbo',
+      'kimi-k2-thinking',
+      'moonshot-v1-8k',
+      'moonshot-v1-32k',
+      'moonshot-v1-128k',
+      'moonshot-v1-auto',
+    ],
+  },
 };
 
 router.get('/', (_req: Request, res: Response): void => {

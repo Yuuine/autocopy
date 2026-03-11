@@ -4,6 +4,7 @@ import { DeepSeekService } from './deepseek';
 import { OpenAIService } from './openai';
 import { ClaudeService } from './claude';
 import { WenxinService } from './wenxin';
+import { MoonshotService } from './moonshot';
 
 export interface AIFactoryConfig {
   provider: AIProvider;
@@ -18,6 +19,7 @@ export class AIServiceFactory {
     wenxin: WenxinService,
     qwen: DeepSeekService,
     gemini: DeepSeekService,
+    moonshot: MoonshotService,
   };
 
   static createService(provider: AIProvider, config: AIProviderConfig): BaseAIService;

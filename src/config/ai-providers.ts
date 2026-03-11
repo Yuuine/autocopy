@@ -44,6 +44,12 @@ export const PROVIDER_DEFAULTS: Record<AIProvider, ProviderDefaultConfig> = {
     defaultTemperature: 0.7,
     defaultMaxTokens: 2000,
   },
+  moonshot: {
+    baseUrl: 'https://api.moonshot.cn/v1',
+    model: 'kimi-k2-turbo-preview',
+    defaultTemperature: 0.6,
+    defaultMaxTokens: 2000,
+  },
 };
 
 export function getProviderDefaults(provider: AIProvider): ProviderDefaultConfig {
