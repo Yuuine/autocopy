@@ -39,7 +39,7 @@ export abstract class BaseAIService {
     if (this.config.parameters?.temperature !== undefined) {
       return this.config.parameters.temperature;
     }
-    return this.config.defaultTemperature ?? 0.7;
+    return undefined;
   }
 
   protected getMaxTokens(request: AIRequest): number | undefined {
@@ -49,7 +49,7 @@ export abstract class BaseAIService {
     if (this.config.parameters?.maxTokens !== undefined) {
       return this.config.parameters.maxTokens;
     }
-    return this.config.defaultMaxTokens ?? 2000;
+    return undefined;
   }
 
   protected getTopP(request: AIRequest): number | undefined {

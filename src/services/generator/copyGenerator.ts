@@ -66,9 +66,11 @@ export class CopyGenerator {
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
         ],
-        temperature: temperature ?? 0.8,
       };
 
+      if (temperature !== undefined) {
+        chatRequest.temperature = temperature;
+      }
       if (maxTokens !== undefined) {
         chatRequest.maxTokens = maxTokens;
       }
@@ -94,8 +96,10 @@ export class CopyGenerator {
               { role: 'system', content: systemPrompt },
               { role: 'user', content: modifiedUserPrompt },
             ],
-            temperature: temperature ?? 0.8,
           };
+          if (temperature !== undefined) {
+            individualRequest.temperature = temperature;
+          }
           if (maxTokens !== undefined) {
             individualRequest.maxTokens = maxTokens;
           }
@@ -177,9 +181,11 @@ export class CopyGenerator {
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
       ],
-      temperature: options?.temperature ?? 0.8,
     };
 
+    if (options?.temperature !== undefined) {
+      chatRequest.temperature = options.temperature;
+    }
     if (options?.maxTokens !== undefined) {
       chatRequest.maxTokens = options.maxTokens;
     }

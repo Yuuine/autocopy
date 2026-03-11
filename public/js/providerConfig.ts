@@ -230,7 +230,15 @@ export class ProviderConfigManager {
       return;
     }
 
-    listEl.innerHTML = this.providers.map(provider => `
+    const sortedProviders = [...this.providers].sort((a, b) => {
+      if (a.configured && !b.configured) return -1;
+      if (!a.configured && b.configured) return 1;
+      if (a.id === this.defaultProvider) return -1;
+      if (b.id === this.defaultProvider) return 1;
+      return 0;
+    });
+
+    listEl.innerHTML = sortedProviders.map(provider => `
       <div class="provider-card ${provider.configured ? 'configured' : ''}" data-provider="${provider.id}">
         <div class="provider-info">
           <h4>${provider.name}</h4>

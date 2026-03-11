@@ -337,6 +337,10 @@ export class AutoCopyApp {
     }
 
     this.customToneModal.classList.add('visible');
+    
+    requestAnimationFrame(() => {
+      if (this.customToneDescTextarea) this.customToneDescTextarea.refresh();
+    });
   }
 
   private closeCustomToneModal(): void {
@@ -543,29 +547,44 @@ export class AutoCopyApp {
     select.disabled = false;
     select.innerHTML = '<option value="">请先选择模型</option>';
     
-    configuredProviders.forEach((provider: any) => {
+    const sortedProviders = [...configuredProviders].sort((a, b) => {
+      if (a.id === defaultProvider) return -1;
+      if (b.id === defaultProvider) return 1;
+      return 0;
+    });
+    
+    sortedProviders.forEach((provider: any) => {
       const option = document.createElement('option');
       option.value = provider.id;
       option.textContent = `${provider.name}${provider.id === defaultProvider ? ' (默认)' : ''}`;
+      if (provider.id === defaultProvider) {
+        option.selected = true;
+      }
       select.appendChild(option);
     });
   }
 
   private updateCurrentProviderInfo(providers: any[], defaultProvider: string): void {
-    const nameEl = document.getElementById('currentProviderName');
-    if (!nameEl) return;
+    const container = document.getElementById('currentProviderInfo');
+    if (!container) return;
 
-    const defaultProviderInfo = providers.find((p: any) => p.id === defaultProvider);
-    if (defaultProviderInfo && defaultProviderInfo.configured) {
-      nameEl.textContent = defaultProviderInfo.name;
-    } else {
-      const configuredProvider = providers.find((p: any) => p.configured);
-      if (configuredProvider) {
-        nameEl.textContent = `${configuredProvider.name}`;
-      } else {
-        nameEl.textContent = '未配置模型';
-      }
+    const configuredProviders = providers.filter((p: any) => p.configured);
+    
+    if (configuredProviders.length === 0) {
+      container.innerHTML = '<span class="current-provider-name">未配置模型</span>';
+      return;
     }
+
+    const providersHTML = configuredProviders
+      .sort((a: any, b: any) => {
+        if (a.id === defaultProvider) return -1;
+        if (b.id === defaultProvider) return 1;
+        return 0;
+      })
+      .map((p: any) => `<span class="provider-badge">${p.name}</span>`)
+      .join('');
+    
+    container.innerHTML = `<div class="provider-badges">${providersHTML}</div>`;
   }
 
   private initArticleTypeCustom(): void {
