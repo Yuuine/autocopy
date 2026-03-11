@@ -1,22 +1,25 @@
 .status-badge {
   font-size: var(--font-size-xs);
-  padding: 3px var(--spacing-md);
-  border-radius: 4px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
   font-weight: var(--font-weight-medium);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
 }
 
 .status-badge.configured {
-  background: rgba(52, 199, 89, 0.15);
+  background: rgba(52, 199, 89, 0.12);
   color: var(--color-success);
 }
 
 .default-badge {
-  background: var(--color-primary);
+  background: linear-gradient(135deg, var(--color-primary) 0%, #0056b3 100%);
   color: white;
-  padding: 3px var(--spacing-md);
-  border-radius: 4px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
+  box-shadow: 0 1px 3px rgba(0, 113, 227, 0.2);
 }
 
 .model-tag {

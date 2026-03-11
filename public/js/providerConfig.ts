@@ -384,13 +384,14 @@ export class ProviderConfigManager {
             <form id="parametersForm">
               ${Object.entries(PARAMETER_CONFIGS).map(([key, config]) => {
                 const currentValue = (parameters as Record<string, number | undefined>)[key];
+                const isEnabled = currentValue !== undefined;
                 return `
-                  <div class="parameter-field">
+                  <div class="parameter-field ${isEnabled ? 'enabled' : ''}" data-param-key="${key}">
                     <div class="parameter-header">
-                      <label for="param-${key}">
+                      <label class="parameter-label">
                         <input type="checkbox" id="enable-${key}" class="param-enable" 
-                               ${currentValue !== undefined ? 'checked' : ''} />
-                        <span>${config.label}</span>
+                               ${isEnabled ? 'checked' : ''} />
+                        <span class="parameter-name">${config.label}</span>
                       </label>
                       <span class="parameter-value" id="value-${key}">
                         ${currentValue !== undefined ? currentValue : '未设置'}
@@ -398,7 +399,7 @@ export class ProviderConfigManager {
                     </div>
                     <p class="parameter-description">${config.description}</p>
                     <div class="parameter-input-wrapper" id="wrapper-${key}" 
-                         style="display: ${currentValue !== undefined ? 'block' : 'none'}">
+                         style="display: ${isEnabled ? 'block' : 'none'}">
                       <input type="range" id="slider-${key}" 
                              min="${config.min}" max="${config.max}" step="${config.step}"
                              value="${currentValue ?? config.default}" />
@@ -449,23 +450,44 @@ export class ProviderConfigManager {
       }
     });
 
+    this.parametersModal.querySelectorAll('.parameter-field').forEach((field) => {
+      field.addEventListener('click', (e) => {
+        const target = e.target as HTMLElement;
+        if (target.closest('.parameter-input-wrapper') || 
+            target.closest('input[type="number"]') ||
+            target.closest('input[type="range"]')) {
+          return;
+        }
+        
+        const key = (field as HTMLElement).dataset['paramKey'];
+        if (!key) return;
+        
+        const enableCheckbox = field.querySelector(`#enable-${key}`) as HTMLInputElement;
+        const wrapper = field.querySelector(`#wrapper-${key}`) as HTMLElement;
+        const slider = field.querySelector(`#slider-${key}`) as HTMLInputElement;
+        const valueDisplay = field.querySelector(`#value-${key}`) as HTMLElement;
+        
+        if (enableCheckbox) {
+          enableCheckbox.checked = !enableCheckbox.checked;
+          
+          if (enableCheckbox.checked) {
+            wrapper.style.display = 'block';
+            (field as HTMLElement).classList.add('enabled');
+            const value = parseFloat(slider.value);
+            valueDisplay.textContent = String(value);
+          } else {
+            wrapper.style.display = 'none';
+            (field as HTMLElement).classList.remove('enabled');
+            valueDisplay.textContent = '未设置';
+          }
+        }
+      });
+    });
+
     Object.entries(PARAMETER_CONFIGS).forEach(([key, config]) => {
-      const enableCheckbox = this.parametersModal?.querySelector(`#enable-${key}`) as HTMLInputElement;
       const slider = this.parametersModal?.querySelector(`#slider-${key}`) as HTMLInputElement;
       const numberInput = this.parametersModal?.querySelector(`#input-${key}`) as HTMLInputElement;
       const valueDisplay = this.parametersModal?.querySelector(`#value-${key}`) as HTMLElement;
-      const wrapper = this.parametersModal?.querySelector(`#wrapper-${key}`) as HTMLElement;
-
-      enableCheckbox?.addEventListener('change', () => {
-        if (enableCheckbox.checked) {
-          wrapper.style.display = 'block';
-          const value = parseFloat(slider.value);
-          valueDisplay.textContent = String(value);
-        } else {
-          wrapper.style.display = 'none';
-          valueDisplay.textContent = '未设置';
-        }
-      });
 
       slider?.addEventListener('input', () => {
         const value = parseFloat(slider.value);
@@ -487,6 +509,7 @@ export class ProviderConfigManager {
 
   private resetParametersToDefaults(): void {
     Object.entries(PARAMETER_CONFIGS).forEach(([key, config]) => {
+      const field = this.parametersModal?.querySelector(`.parameter-field[data-param-key="${key}"]`) as HTMLElement;
       const enableCheckbox = this.parametersModal?.querySelector(`#enable-${key}`) as HTMLInputElement;
       const slider = this.parametersModal?.querySelector(`#slider-${key}`) as HTMLInputElement;
       const numberInput = this.parametersModal?.querySelector(`#input-${key}`) as HTMLInputElement;
@@ -502,6 +525,9 @@ export class ProviderConfigManager {
         }
         if (wrapper) {
           wrapper.style.display = 'block';
+        }
+        if (field) {
+          field.classList.add('enabled');
         }
       }
     });
