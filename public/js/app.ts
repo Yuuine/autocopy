@@ -1,6 +1,9 @@
 import { ProviderConfigManager } from './providerConfig.js';
 import { toast, dialog } from './modal.js';
 import { AutoResizeTextarea } from './components/AutoResizeTextarea.js';
+import { createLogger, logApiCall, logUserAction } from './logger.js';
+
+const logger = createLogger('App');
 
 interface PromptPreview {
   system: string;
@@ -13,6 +16,22 @@ interface CustomTone {
   description: string;
   createdAt: Date;
   updatedAt: Date;
+}
+
+interface ScoringDetail {
+  criteria: string;
+  score: number;
+  maxScore: number;
+  comment: string;
+}
+
+interface ScoringResult {
+  totalScore: number;
+  maxScore: number;
+  percentage: number;
+  details: ScoringDetail[];
+  summary: string;
+  suggestions: string[];
 }
 
 export class AutoCopyApp {
@@ -34,6 +53,9 @@ export class AutoCopyApp {
   private userPromptEdit: AutoResizeTextarea | null = null;
   private customToneDescTextarea: AutoResizeTextarea | null = null;
   private promptPreviewAbortController: AbortController | null = null;
+  private scoringModal: HTMLElement | null = null;
+  private enableScoring: boolean = false;
+  private currentInstanceId: string | null = null;
 
   constructor() {
     this.form = document.getElementById('generateForm') as HTMLFormElement;
@@ -46,6 +68,7 @@ export class AutoCopyApp {
   }
 
   private async init(): Promise<void> {
+    logger.info('初始化应用...');
     await this.loadProviders();
     await this.loadCustomTones();
     this.bindEvents();
@@ -55,7 +78,9 @@ export class AutoCopyApp {
     this.listenProviderConfigChanges();
     this.createPromptPreviewModal();
     this.createCustomToneModal();
+    this.createScoringModal();
     this.bindCustomToneEvents();
+    logger.info('应用初始化完成');
   }
 
   private initAutoResizeTextareas(): void {
@@ -313,6 +338,145 @@ export class AutoCopyApp {
       e.preventDefault();
       this.openCustomToneModal();
     });
+  }
+
+  private createScoringModal(): void {
+    const modalHTML = `
+      <div id="scoringModal" class="scoring-modal">
+        <div class="scoring-content">
+          <div class="scoring-header">
+            <h2>文案评分详情</h2>
+            <button class="scoring-close" id="closeScoringModal" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 6L6 18"/>
+                <path d="M6 6l12 12"/>
+              </svg>
+            </button>
+          </div>
+          <div class="scoring-body" id="scoringBody">
+          </div>
+          <div class="scoring-footer">
+            <button type="button" class="btn btn-secondary" id="closeScoringBtn">关闭</button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    this.scoringModal = document.getElementById('scoringModal');
+    
+    this.bindScoringModalEvents();
+  }
+
+  private bindScoringModalEvents(): void {
+    if (!this.scoringModal) return;
+
+    const closeBtn = this.scoringModal.querySelector('#closeScoringModal');
+    const closeFooterBtn = this.scoringModal.querySelector('#closeScoringBtn');
+
+    closeBtn?.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.closeScoringModal();
+    });
+
+    closeFooterBtn?.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.closeScoringModal();
+    });
+
+    this.scoringModal.addEventListener('click', (e) => {
+      if (e.target === this.scoringModal) {
+        this.closeScoringModal();
+      }
+    });
+  }
+
+  private openScoringModal(score: ScoringResult): void {
+    if (!this.scoringModal) return;
+
+    const body = this.scoringModal.querySelector('#scoringBody');
+    if (!body) return;
+
+    const scoreColor = this.getScoreColor(score.percentage);
+    
+    body.innerHTML = `
+      <div class="scoring-overview">
+        <div class="scoring-total">
+          <div class="scoring-circle" style="--score-color: ${scoreColor}">
+            <span class="scoring-percentage">${score.percentage}</span>
+            <span class="scoring-label">分</span>
+          </div>
+          <div class="scoring-summary">${this.escapeHtml(score.summary)}</div>
+        </div>
+      </div>
+      <div class="scoring-details">
+        <h3>评分细则</h3>
+        <div class="scoring-criteria-list">
+          ${score.details.map(detail => `
+            <div class="scoring-criteria-item">
+              <div class="criteria-header">
+                <span class="criteria-name">${this.escapeHtml(detail.criteria)}</span>
+                <span class="criteria-score" style="color: ${this.getScoreColor((detail.score / detail.maxScore) * 100)}">
+                  ${detail.score}/${detail.maxScore}
+                </span>
+              </div>
+              <div class="criteria-bar">
+                <div class="criteria-bar-fill" style="width: ${(detail.score / detail.maxScore) * 100}%; background: ${this.getScoreColor((detail.score / detail.maxScore) * 100)}"></div>
+              </div>
+              <p class="criteria-comment">${this.escapeHtml(detail.comment)}</p>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      ${score.suggestions.length > 0 ? `
+        <div class="scoring-suggestions">
+          <h3>改进建议</h3>
+          <ul class="suggestions-list">
+            ${score.suggestions.map(s => `<li>${this.escapeHtml(s)}</li>`).join('')}
+          </ul>
+        </div>
+      ` : ''}
+    `;
+
+    this.scoringModal.classList.add('visible');
+  }
+
+  private closeScoringModal(): void {
+    if (!this.scoringModal) return;
+    this.scoringModal.classList.remove('visible');
+  }
+
+  private getScoreColor(percentage: number): string {
+    if (percentage >= 80) return '#34c759';
+    if (percentage >= 60) return '#0071e3';
+    if (percentage >= 40) return '#ff9500';
+    return '#ff3b30';
+  }
+
+  private async fetchScore(content: string): Promise<ScoringResult | null> {
+    if (!this.currentInstanceId) return null;
+
+    try {
+      const response = await fetch('/api/copywriting/score', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          content,
+          instanceId: this.currentInstanceId,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success && result.score) {
+        return result.score;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error fetching score:', error);
+      return null;
+    }
   }
 
   private openCustomToneModal(editTone?: CustomTone): void {
@@ -719,6 +883,9 @@ export class AutoCopyApp {
     const selectedToneOption = toneSelect.options[toneSelect.selectedIndex];
     const customToneId = selectedToneOption?.dataset['customToneId'] || undefined;
 
+    this.enableScoring = formData.has('enableScoring');
+    this.currentInstanceId = instanceId;
+
     const data = {
       articleType: articleType || '推广文案',
       tone: formData.get('tone'),
@@ -732,6 +899,7 @@ export class AutoCopyApp {
       additionalRequirements: this.additionalRequirementsTextarea?.getValue() || formData.get('additionalRequirements') || undefined,
       count: count,
       instanceId: instanceId,
+      enableScoring: this.enableScoring,
     };
 
     const previewPrompt = formData.has('previewPrompt');
@@ -831,8 +999,12 @@ export class AutoCopyApp {
   private async generateDirectly(data: any): Promise<void> {
     this.setLoading(true);
     this.hideResults();
+    
+    const timer = logger.timer('generateDirectly');
+    logger.info('发送生成请求...', { instanceId: data.instanceId, count: data.count });
 
     try {
+      const start = Date.now();
       const response = await fetch('/api/copywriting/generate', {
         method: 'POST',
         headers: {
@@ -840,18 +1012,25 @@ export class AutoCopyApp {
         },
         body: JSON.stringify(data),
       });
+      const duration = Date.now() - start;
 
       const result = await response.json();
+      
+      logApiCall('/api/copywriting/generate', 'POST', duration, response.status);
+      logger.debug('生成结果:', { success: result.success, count: result.results?.length });
 
       if (result.success) {
+        logger.info(`生成成功: ${result.results.length} 个结果`);
         this.showResults(result.results, result.instanceId);
       } else {
+        logger.warn(`生成失败: ${result.error}`);
         this.showError(result.error || '生成失败，请稍后重试');
       }
     } catch (error) {
-      console.error('Error:', error);
+      logger.error('网络错误:', error);
       this.showError('网络错误，请检查服务器是否正常运行');
     } finally {
+      timer();
       this.setLoading(false);
     }
   }
@@ -893,10 +1072,18 @@ export class AutoCopyApp {
     const card = document.createElement('div');
     card.className = 'result-card';
     
+    console.log(`[createResultCard] Index ${index}, enableScoring: ${this.enableScoring}, hasScore: ${!!result.score}`, result.score);
+    
+    const hasScore = this.enableScoring && result.score && result.score.percentage !== undefined;
+    const scoreHtml = hasScore 
+      ? `<span class="score-badge clickable" style="background: ${this.getScoreColor(result.score.percentage)}" title="点击查看评分详情">${result.score.percentage}分</span>`
+      : (this.enableScoring ? '<span class="score-placeholder"><span class="score-loading">评分中...</span></span>' : '');
+    
     card.innerHTML = `
       <div class="result-header">
         <span class="result-title">版本 ${index}</span>
         <div class="result-meta">
+          ${scoreHtml}
           <span>字数: ${result.wordCount}</span>
         </div>
       </div>
@@ -909,7 +1096,39 @@ export class AutoCopyApp {
     const copyBtn = card.querySelector('.btn-copy') as HTMLButtonElement;
     copyBtn.addEventListener('click', () => this.copyToClipboard(copyBtn, result.content));
 
+    if (hasScore) {
+      const scoreBadge = card.querySelector('.score-badge');
+      scoreBadge?.addEventListener('click', () => {
+        this.openScoringModal(result.score);
+      });
+    } else if (this.enableScoring) {
+      this.attachScoringToCard(card, result.content);
+    }
+
     return card;
+  }
+
+  private async attachScoringToCard(card: HTMLElement, content: string): Promise<void> {
+    const scorePlaceholder = card.querySelector('.score-placeholder');
+    if (!scorePlaceholder) return;
+
+    const score = await this.fetchScore(content);
+    
+    if (score) {
+      const scoreColor = this.getScoreColor(score.percentage);
+      scorePlaceholder.innerHTML = `
+        <span class="score-badge clickable" style="background: ${scoreColor}" title="点击查看评分详情">
+          ${score.percentage}分
+        </span>
+      `;
+      
+      const scoreBadge = scorePlaceholder.querySelector('.score-badge');
+      scoreBadge?.addEventListener('click', () => {
+        this.openScoringModal(score);
+      });
+    } else {
+      scorePlaceholder.innerHTML = '<span class="score-error">评分失败</span>';
+    }
   }
 
   private escapeHtml(text: string): string {

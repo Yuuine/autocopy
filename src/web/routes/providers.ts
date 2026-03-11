@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import type { AIProvider, ModelParameters } from '../../types';
 import { AIServiceFactory } from '../../services/ai';
 import {
@@ -267,24 +267,24 @@ router.post('/instances/:instanceId/default', (req: Request, res: Response): voi
   });
 });
 
-router.post('/instances/:instanceId/validate', async (req: Request, res: Response): Promise<void> => {
+router.post('/instances/:instanceId/validate', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const { instanceId } = req.params;
   const { apiKey, secretKey, baseUrl } = req.body;
 
   if (!instanceId) {
-    throw createError('缺少实例ID', 400);
+    return next(createError('缺少实例ID', 400));
   }
 
   const instance = getInstance(instanceId);
   
   if (!instance) {
-    throw createError('实例不存在', 404);
+    return next(createError('实例不存在', 404));
   }
 
   const testApiKey = apiKey || instance.apiKey;
   
   if (!testApiKey) {
-    throw createError('API 密钥不能为空', 400);
+    return next(createError('API 密钥不能为空', 400));
   }
 
   try {
@@ -320,15 +320,15 @@ router.post('/instances/:instanceId/validate', async (req: Request, res: Respons
   }
 });
 
-router.post('/validate', async (req: Request, res: Response): Promise<void> => {
+router.post('/validate', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const { provider, apiKey, secretKey, baseUrl, model } = req.body;
 
   if (!provider || !PROVIDER_INFO[provider as AIProvider]) {
-    throw createError('不支持的模型提供商', 400);
+    return next(createError('不支持的模型提供商', 400));
   }
 
   if (!apiKey) {
-    throw createError('API 密钥不能为空', 400);
+    return next(createError('API 密钥不能为空', 400));
   }
 
   try {

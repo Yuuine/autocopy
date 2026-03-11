@@ -1,26 +1,31 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import type { CopywritingRequest } from '../../index';
 import type { ProviderInstanceId } from '../../types';
 import { AIServiceFactory } from '../../services/ai';
-import { CopyGenerator } from '../../services/generator';
+import { CopyGenerator, ScoringService } from '../../services/generator';
 import type { GenerationOptions } from '../../types';
 import { getInstanceDecrypted, getDefaultInstanceId, hasInstance, getInstance, getCustomTones, addCustomTone, updateCustomTone, deleteCustomTone, getCustomToneById } from '../../utils/userConfig';
 import { createError } from '../middleware';
 import { buildSystemPrompt, buildUserPrompt, buildMultiVersionPrompt } from '../../templates';
+import { createLogger } from '../../utils/logger';
 
 const router = Router();
+const logger = createLogger('Copywriting');
 
 interface GenerateRequestBody extends CopywritingRequest {
   instanceId?: ProviderInstanceId;
   count?: number;
   customToneId?: string;
+  enableScoring?: boolean;
 }
 
 async function generateWithInstance(
   instanceId: ProviderInstanceId,
   request: CopywritingRequest,
-  options?: { count?: number }
+  options?: { count?: number; enableScoring?: boolean }
 ) {
+  const timer = logger.timer('generateWithInstance');
+  
   const config = getInstanceDecrypted(instanceId);
   
   if (!config) {
@@ -31,6 +36,8 @@ async function generateWithInstance(
   if (!instance) {
     throw new Error(`无法获取模型实例 ${instanceId}`);
   }
+  
+  logger.debug(`使用模型: ${instance.provider}/${instance.model || 'default'}`);
   
   const serviceConfig: { apiKey: string; secretKey?: string; baseUrl?: string; model?: string | undefined } = {
     apiKey: config.apiKey,
@@ -51,10 +58,47 @@ async function generateWithInstance(
     ? { count: options.count }
     : undefined;
   
-  return generator.generate(request, genOptions);
+  const result = await generator.generate(request, genOptions);
+
+  logger.debug(`生成结果: success=${result.success}, count=${result.results.length}`);
+
+  if (options?.enableScoring && result.success && result.results.length > 0) {
+    logger.info('开始评分流程...');
+    const scoringService = new ScoringService(aiService);
+    
+    const scoringContext: { articleType?: string; tone?: string; wordCount?: number } = {
+      articleType: request.articleType,
+      tone: request.tone,
+      wordCount: request.wordCount,
+    };
+    
+    const scoredResults = await Promise.all(result.results.map(async (item, idx) => {
+      try {
+        logger.debug(`评分第 ${idx + 1} 个结果, 内容长度: ${item.content?.length}`);
+        const score = await scoringService.scoreContent(item.content, scoringContext);
+        logger.info(`评分完成 [${idx + 1}]: ${score.percentage}分`);
+        return { ...item, score };
+      } catch (error) {
+        logger.warn(`评分失败 [${idx + 1}]:`, error instanceof Error ? error.message : error);
+        return item;
+      }
+    }));
+
+    logger.info(`所有评分完成, 成功: ${scoredResults.filter(r => r.score).length}/${scoredResults.length}`);
+    timer();
+    return {
+      ...result,
+      results: scoredResults,
+    };
+  }
+  
+  timer();
+  return result;
 }
 
-router.post('/generate', async (req: Request, res: Response): Promise<void> => {
+router.post('/generate', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  const timer = logger.timer('POST /generate');
+  
   try {
     const {
       articleType,
@@ -69,13 +113,18 @@ router.post('/generate', async (req: Request, res: Response): Promise<void> => {
       count,
       instanceId: requestedInstanceId,
       customToneId,
+      enableScoring,
     } = req.body as GenerateRequestBody;
 
+    logger.info(`收到生成请求: 类型=${articleType || '其他'}, 语气=${tone || '轻松'}, 字数=${wordCount}, 数量=${count || 3}`);
+
     if (!content) {
+      logger.warn('请求验证失败: 内容描述为空');
       throw createError('内容描述不能为空', 400);
     }
 
     if (!wordCount || wordCount < 10 || wordCount > 2000) {
+      logger.warn(`请求验证失败: 字数无效 ${wordCount}`);
       throw createError('字数要求必须在 10-2000 之间', 400);
     }
 
@@ -84,12 +133,15 @@ router.post('/generate', async (req: Request, res: Response): Promise<void> => {
     if (!instanceId || !hasInstance(instanceId)) {
       const defaultId = getDefaultInstanceId();
       if (!defaultId || !hasInstance(defaultId)) {
+        logger.warn('没有可用的模型实例');
         throw createError(
           '请先配置至少一个模型服务。前往"模型配置"页面添加您的 API 密钥。',
           400
         );
       }
     }
+
+    logger.debug(`使用实例: ${instanceId}`);
 
     const request: CopywritingRequest = {
       articleType: articleType ?? '其他',
@@ -113,20 +165,32 @@ router.post('/generate', async (req: Request, res: Response): Promise<void> => {
 
     const result = await generateWithInstance(instanceId, request, {
       count: count ?? 3,
+      enableScoring: enableScoring ?? false,
     });
+
+    if (result.success) {
+      logger.info(`生成成功: ${result.results.length} 个结果`);
+    } else {
+      logger.warn(`生成失败: ${result.error}`);
+    }
 
     res.json({
       ...result,
       instanceId,
     });
+    
+    timer();
   } catch (error) {
+    timer();
+    logger.error('生成请求出错:', error instanceof Error ? error.message : error);
+    
     if (error instanceof Error) {
       if (error.message.includes('API key')) {
-        throw createError('API 密钥无效或已过期，请检查配置', 401);
+        return next(createError('API 密钥无效或已过期，请检查配置', 401));
       }
-      throw createError(error.message, 400);
+      return next(createError(error.message, 400));
     }
-    throw createError('生成失败', 500);
+    next(createError('生成失败', 500));
   }
 });
 
@@ -231,7 +295,7 @@ interface GenerateWithPromptBody {
   maxTokens?: number;
 }
 
-router.post('/generate-with-prompt', async (req: Request, res: Response): Promise<void> => {
+router.post('/generate-with-prompt', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const {
       instanceId: requestedInstanceId,
@@ -309,11 +373,11 @@ router.post('/generate-with-prompt', async (req: Request, res: Response): Promis
   } catch (error) {
     if (error instanceof Error) {
       if (error.message.includes('API key')) {
-        throw createError('API 密钥无效或已过期，请检查配置', 401);
+        return next(createError('API 密钥无效或已过期，请检查配置', 401));
       }
-      throw createError(error.message, 400);
+      return next(createError(error.message, 400));
     }
-    throw createError('生成失败', 500);
+    next(createError('生成失败', 500));
   }
 });
 
@@ -467,6 +531,85 @@ router.get('/custom-tones/:id', (req: Request, res: Response): void => {
       throw createError(error.message, 400);
     }
     throw createError('获取自定义语气失败', 500);
+  }
+});
+
+interface ScoreContentBody {
+  content: string;
+  instanceId?: ProviderInstanceId;
+  articleType?: string;
+  tone?: string;
+  wordCount?: number;
+}
+
+router.post('/score', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const {
+      content,
+      instanceId: requestedInstanceId,
+      articleType,
+      tone,
+      wordCount,
+    } = req.body as ScoreContentBody;
+
+    if (!content || content.trim().length === 0) {
+      throw createError('文案内容不能为空', 400);
+    }
+
+    const instanceId: ProviderInstanceId = requestedInstanceId ?? getDefaultInstanceId();
+    
+    if (!instanceId || !hasInstance(instanceId)) {
+      throw createError(
+        '请先配置至少一个模型服务。前往"模型配置"页面添加您的 API 密钥。',
+        400
+      );
+    }
+
+    const config = getInstanceDecrypted(instanceId);
+    
+    if (!config) {
+      throw createError(`模型实例 ${instanceId} 未配置或已禁用`, 400);
+    }
+
+    const instance = getInstance(instanceId);
+    if (!instance) {
+      throw createError(`无法获取模型实例 ${instanceId}`, 400);
+    }
+
+    const serviceConfig: { apiKey: string; secretKey?: string; baseUrl?: string; model?: string | undefined } = {
+      apiKey: config.apiKey,
+      model: config.model ?? undefined,
+    };
+    
+    if (config.secretKey) {
+      serviceConfig.secretKey = config.secretKey;
+    }
+    if (config.baseUrl) {
+      serviceConfig.baseUrl = config.baseUrl;
+    }
+
+    const aiService = AIServiceFactory.createService(instance.provider, serviceConfig);
+    const scoringService = new ScoringService(aiService);
+
+    const scoringContext: { articleType?: string; tone?: string; wordCount?: number } = {};
+    if (articleType) scoringContext.articleType = articleType;
+    if (tone) scoringContext.tone = tone;
+    if (wordCount) scoringContext.wordCount = wordCount;
+
+    const result = await scoringService.scoreContent(content, scoringContext);
+
+    res.json({
+      success: true,
+      score: result,
+    });
+  } catch (error) {
+    if (error instanceof Error) {
+      if (error.message.includes('API key')) {
+        return next(createError('API 密钥无效或已过期，请检查配置', 401));
+      }
+      return next(createError(error.message, 400));
+    }
+    next(createError('评分失败', 500));
   }
 });
 

@@ -50,6 +50,7 @@ export interface CopywritingResult {
   content: string;
   wordCount: number;
   metadata: CopywritingMetadata;
+  score?: ScoringResult;
 }
 
 export interface CopywritingMetadata {
@@ -71,4 +72,31 @@ export interface GenerationResult {
   success: boolean;
   results: CopywritingResult[];
   error?: string;
+}
+
+export interface ScoringCriteria {
+  name: string;
+  description: string;
+  weight: number;
+  maxScore: number;
+}
+
+export interface ScoringDetail {
+  criteria: string;
+  score: number;
+  maxScore: number;
+  comment: string;
+}
+
+export interface ScoringResult {
+  totalScore: number;
+  maxScore: number;
+  percentage: number;
+  details: ScoringDetail[];
+  summary: string;
+  suggestions: string[];
+}
+
+export interface CopywritingResultWithScore extends CopywritingResult {
+  score?: ScoringResult;
 }

@@ -5,6 +5,9 @@ import type {
   AIProviderConfig
 } from '../../types';
 import { BaseAIService } from './base';
+import { createLogger, logApiCall } from '../../utils/logger';
+
+const logger = createLogger('DeepSeek');
 
 interface DeepSeekChatResponse {
   id: string;
@@ -41,15 +44,21 @@ export class DeepSeekService extends BaseAIService {
   constructor(config: AIProviderConfig) {
     super(config);
     this.validateConfig();
+    logger.debug('DeepSeek 服务初始化完成');
   }
 
   async chat(request: AIRequest): Promise<AIResponse> {
+    const timer = logger.timer('chat');
     const baseUrl = this.config.baseUrl ?? this.defaultBaseUrl;
     const url = `${baseUrl}/chat/completions`;
+    const model = this.getModel(request);
+    
+    logger.debug(`发送请求到 DeepSeek API: ${model}`);
     
     const body = this.buildRequestBody(request);
 
     try {
+      const httpStart = Date.now();
       const httpResponse = await fetch(url, {
         method: 'POST',
         headers: {
@@ -60,21 +69,34 @@ export class DeepSeekService extends BaseAIService {
       });
 
       if (!httpResponse.ok) {
-        const errorData = await httpResponse.json() as DeepSeekError;
-        throw new Error(
-          `DeepSeek API error: ${errorData.error?.message ?? httpResponse.statusText}`
-        );
+        let errorMessage = `DeepSeek API error: ${httpResponse.status} ${httpResponse.statusText}`;
+        try {
+          const errorData = await httpResponse.json() as DeepSeekError;
+          if (errorData.error?.message) {
+            errorMessage = `DeepSeek API error: ${errorData.error.message}`;
+          }
+        } catch {
+          const textResponse = await httpResponse.text().catch(() => '');
+          if (textResponse) {
+            errorMessage = `DeepSeek API error: ${textResponse.substring(0, 200)}`;
+          }
+        }
+        logger.error(`API 请求失败: ${errorMessage}`);
+        throw new Error(errorMessage);
       }
 
       const data = await httpResponse.json() as DeepSeekChatResponse;
+      const httpDuration = Date.now() - httpStart;
       
       const firstChoice = data.choices[0];
       if (!firstChoice) {
+        logger.error('API 返回空响应');
         throw new Error('No response from DeepSeek API');
       }
 
       const content = firstChoice.message.content;
       if (content === null) {
+        logger.error('API 返回空内容');
         throw new Error('No content in DeepSeek API response');
       }
 
@@ -83,6 +105,8 @@ export class DeepSeekService extends BaseAIService {
         completionTokens: data.usage.completion_tokens,
         totalTokens: data.usage.total_tokens,
       } : undefined;
+
+      logApiCall('DeepSeek', model, usage?.promptTokens, usage?.completionTokens, httpDuration);
 
       const aiResponse: AIResponse = {
         content: content,
@@ -94,9 +118,12 @@ export class DeepSeekService extends BaseAIService {
         aiResponse.usage = usage;
       }
 
+      timer();
       return aiResponse;
     } catch (error) {
+      timer();
       if (error instanceof Error) {
+        logger.error(`DeepSeek 服务错误: ${error.message}`);
         throw new Error(`DeepSeek service error: ${error.message}`);
       }
       throw new Error('Unknown error occurred in DeepSeek service');

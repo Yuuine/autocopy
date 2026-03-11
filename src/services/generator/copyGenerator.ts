@@ -88,23 +88,27 @@ export class CopyGenerator {
       const versions = splitByVersions(cleanedContent);
       
       if (versions.length === 1 && count > 1) {
-        const promises = Array.from({ length: count }, (_, i) => {
-          const modifiedUserPrompt = `${userPrompt}\n\n## 特别说明\n这是第 ${i + 1} 个版本，请尝试不同的切入角度和表达方式。`;
-          const individualRequest: import('../../types').AIRequest = {
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: modifiedUserPrompt },
-            ],
-          };
-          if (temperature !== undefined) {
-            individualRequest.temperature = temperature;
+        const promises = Array.from({ length: count }, async (_, i) => {
+          try {
+            const modifiedUserPrompt = `${userPrompt}\n\n## 特别说明\n这是第 ${i + 1} 个版本，请尝试不同的切入角度和表达方式。`;
+            const individualRequest: import('../../types').AIRequest = {
+              messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: modifiedUserPrompt },
+              ],
+            };
+            if (temperature !== undefined) {
+              individualRequest.temperature = temperature;
+            }
+            if (maxTokens !== undefined) {
+              individualRequest.maxTokens = maxTokens;
+            }
+            const response = await this.aiService.chat(individualRequest);
+            return this.createResultFromContent(cleanResponse(response.content));
+          } catch (error) {
+            console.error(`Error generating version ${i + 1}:`, error);
+            return this.createResultFromContent(`生成第 ${i + 1} 个版本时出错，请重试`);
           }
-          if (maxTokens !== undefined) {
-            individualRequest.maxTokens = maxTokens;
-          }
-          return this.aiService.chat(individualRequest).then(response => 
-            this.createResultFromContent(cleanResponse(response.content))
-          );
         });
         
         const results = await Promise.all(promises);
@@ -210,16 +214,21 @@ export class CopyGenerator {
   ): Promise<CopywritingResult[]> {
     const count = options?.count ?? 3;
     
-    const promises = Array.from({ length: count }, (_, i) => {
-      const modifiedRequest: CopywritingRequest = {
-        ...request,
-        additionalRequirements: [
-          request.additionalRequirements ?? '',
-          `这是第 ${i + 1} 个版本，请尝试不同的切入角度和表达方式。`,
-        ].filter(Boolean).join('\n'),
-      };
+    const promises = Array.from({ length: count }, async (_, i) => {
+      try {
+        const modifiedRequest: CopywritingRequest = {
+          ...request,
+          additionalRequirements: [
+            request.additionalRequirements ?? '',
+            `这是第 ${i + 1} 个版本，请尝试不同的切入角度和表达方式。`,
+          ].filter(Boolean).join('\n'),
+        };
 
-      return this.generateSingle(modifiedRequest, options);
+        return await this.generateSingle(modifiedRequest, options);
+      } catch (error) {
+        console.error(`Error generating individual version ${i + 1}:`, error);
+        return this.createResult(`生成第 ${i + 1} 个版本时出错: ${error instanceof Error ? error.message : '未知错误'}`, request);
+      }
     });
 
     return Promise.all(promises);
