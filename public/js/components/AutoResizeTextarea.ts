@@ -25,6 +25,8 @@ export class AutoResizeTextarea {
   private lineHeight: number = 0;
   private paddingY: number = 0;
   private isResizing: boolean = false;
+  private isInitialized: boolean = false;
+  private resizeObserver: ResizeObserver | null = null;
 
   constructor(options: AutoResizeTextareaOptions = {}) {
     this.options = {
@@ -66,7 +68,7 @@ export class AutoResizeTextarea {
     
     textarea.rows = this.options.minRows!;
     textarea.style.height = this.options.initialHeight!;
-    textarea.style.transitionDuration = `${this.options.transitionDuration}ms`;
+    textarea.style.transition = `height ${this.options.transitionDuration}ms ease-out`;
     
     return textarea;
   }
@@ -79,16 +81,29 @@ export class AutoResizeTextarea {
   }
 
   private init(): void {
-    this.computeStyles();
     this.bindEvents();
-    this.updateHeight();
+    this.setupResizeObserver();
+  }
+
+  private setupResizeObserver(): void {
+    this.resizeObserver = new ResizeObserver(() => {
+      if (!this.isInitialized && this.isInDOM()) {
+        this.isInitialized = true;
+        this.computeStyles();
+        this.updateHeight(true);
+      }
+    });
     
-    if (this.options.value) {
-      requestAnimationFrame(() => this.updateHeight());
-    }
+    this.resizeObserver.observe(this.container);
+  }
+
+  private isInDOM(): boolean {
+    return document.body.contains(this.container);
   }
 
   private computeStyles(): void {
+    if (!this.isInDOM()) return;
+    
     const computedStyle = window.getComputedStyle(this.textarea);
     
     this.lineHeight = parseFloat(computedStyle.lineHeight) || parseFloat(computedStyle.fontSize) * 1.5;
@@ -165,11 +180,18 @@ export class AutoResizeTextarea {
     this.updateHeight();
   }
 
-  private updateHeight(): void {
+  private updateHeight(isInitial: boolean = false): void {
+    if (!this.isInDOM()) return;
+    
     if (this.isResizing) return;
     this.isResizing = true;
     
-    this.shadowElement.textContent = this.textarea.value + '\n';
+    if (!this.lineHeight || !this.minHeight) {
+      this.computeStyles();
+    }
+    
+    const value = this.textarea.value;
+    this.shadowElement.textContent = value + (value.length > 0 ? '\n' : '');
     
     const scrollHeight = this.shadowElement.scrollHeight;
     
@@ -194,8 +216,19 @@ export class AutoResizeTextarea {
   }
 
   public setValue(value: string): void {
+    const hadValue = this.textarea.value.length > 0;
+    const hasValue = value.length > 0;
+    
     this.textarea.value = value;
-    this.updateHeight();
+    
+    if (!hadValue && hasValue && !this.isInitialized) {
+      requestAnimationFrame(() => {
+        this.computeStyles();
+        this.updateHeight(true);
+      });
+    } else {
+      this.updateHeight();
+    }
   }
 
   public getValue(): string {
@@ -255,7 +288,17 @@ export class AutoResizeTextarea {
     this.textarea.style.height = `${this.minHeight}px`;
   }
 
+  public refresh(): void {
+    this.computeStyles();
+    this.updateHeight();
+  }
+
   public destroy(): void {
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+      this.resizeObserver = null;
+    }
+    
     window.removeEventListener('resize', this.handleWindowResize.bind(this));
     this.textarea.removeEventListener('input', this.handleInput.bind(this));
     this.textarea.removeEventListener('paste', this.handlePaste.bind(this));
