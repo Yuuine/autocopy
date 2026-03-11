@@ -22,17 +22,10 @@ export interface CustomTone {
   id: string;
   name: string;
   description: string;
+  rules?: string[];
   createdAt: Date;
   updatedAt: Date;
 }
-
-export type Platform = 
-  | '微信公众号'
-  | '微博'
-  | '小红书'
-  | '抖音'
-  | '朋友圈'
-  | '通用';
 
 export interface CopywritingRequest {
   articleType: ArticleType;
@@ -43,9 +36,13 @@ export interface CopywritingRequest {
   useHashtag: boolean;
   content: string;
   wordCount: number;
-  platform?: Platform;
   keywords?: string[];
   additionalRequirements?: string;
+  targetAudience?: string;
+  brandVoice?: string;
+  productFeatures?: string[] | string;
+  competitorReference?: string;
+  forbiddenWords?: string[];
 }
 
 export interface CopywritingResult {
@@ -58,7 +55,6 @@ export interface CopywritingResult {
 export interface CopywritingMetadata {
   articleType: ArticleType;
   tone: Tone;
-  platform: Platform;
   hasEmoji: boolean;
   hasParagraphs: boolean;
   hasHashtag: boolean;

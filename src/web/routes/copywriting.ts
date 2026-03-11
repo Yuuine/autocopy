@@ -61,7 +61,6 @@ router.post('/generate', async (req: Request, res: Response): Promise<void> => {
       useHashtag,
       content,
       wordCount,
-      platform,
       keywords,
       additionalRequirements,
       count,
@@ -97,7 +96,6 @@ router.post('/generate', async (req: Request, res: Response): Promise<void> => {
       useHashtag: useHashtag ?? false,
       content,
       wordCount,
-      platform: platform ?? '通用',
     };
     
     if (keywords) {
@@ -151,14 +149,6 @@ router.get('/options', (_req: Request, res: Response): void => {
       { value: '温暖', label: '温暖' },
       { value: '客观', label: '客观' },
     ],
-    platforms: [
-      { value: '微信公众号', label: '微信公众号' },
-      { value: '微博', label: '微博' },
-      { value: '小红书', label: '小红书' },
-      { value: '抖音', label: '抖音' },
-      { value: '朋友圈', label: '朋友圈' },
-      { value: '通用', label: '通用' },
-    ],
   });
 });
 
@@ -172,7 +162,6 @@ router.post('/preview', (req: Request, res: Response): void => {
       useHashtag,
       content,
       wordCount,
-      platform,
       keywords,
       additionalRequirements,
       count,
@@ -195,7 +184,6 @@ router.post('/preview', (req: Request, res: Response): void => {
       useHashtag: useHashtag ?? false,
       content,
       wordCount,
-      platform: platform ?? '通用',
     };
     
     if (keywords) {

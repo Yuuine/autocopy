@@ -6,7 +6,6 @@ import type {
   CopywritingResult,
   ArticleType,
   Tone,
-  Platform,
   AIProvider
 } from './types';
 import { AIServiceFactory } from './services/ai';
@@ -70,7 +69,6 @@ export {
   type CopywritingResult,
   type ArticleType,
   type Tone,
-  type Platform,
   type AIProvider,
   type AIProviderConfig,
 };

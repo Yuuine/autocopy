@@ -33,6 +33,7 @@ export class AutoCopyApp {
   private systemPromptEdit: AutoResizeTextarea | null = null;
   private userPromptEdit: AutoResizeTextarea | null = null;
   private customToneDescTextarea: AutoResizeTextarea | null = null;
+  private promptPreviewAbortController: AbortController | null = null;
 
   constructor() {
     this.form = document.getElementById('generateForm') as HTMLFormElement;
@@ -185,12 +186,22 @@ export class AutoCopyApp {
   private openPromptPreviewModal(): void {
     if (!this.promptPreviewModal) return;
     this.promptPreviewModal.classList.add('visible');
+    
+    requestAnimationFrame(() => {
+      if (this.systemPromptEdit) this.systemPromptEdit.refresh();
+      if (this.userPromptEdit) this.userPromptEdit.refresh();
+    });
   }
 
   private closePromptPreviewModal(): void {
     if (!this.promptPreviewModal) return;
     this.promptPreviewModal.classList.remove('visible');
     this.setPromptPreviewLoading(false);
+    
+    if (this.promptPreviewAbortController) {
+      this.promptPreviewAbortController.abort();
+      this.promptPreviewAbortController = null;
+    }
   }
 
   private setPromptPreviewLoading(loading: boolean): void {
@@ -761,6 +772,8 @@ export class AutoCopyApp {
     this.setPromptPreviewLoading(true);
     this.hideResults();
 
+    this.promptPreviewAbortController = new AbortController();
+
     try {
       const response = await fetch('/api/copywriting/generate-with-prompt', {
         method: 'POST',
@@ -773,6 +786,7 @@ export class AutoCopyApp {
           userPrompt,
           count: this.currentFormData.count,
         }),
+        signal: this.promptPreviewAbortController.signal,
       });
 
       const result = await response.json();
@@ -784,10 +798,14 @@ export class AutoCopyApp {
         toast.error(result.error || '生成失败，请稍后重试');
       }
     } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        return;
+      }
       console.error('Error:', error);
       toast.error('网络错误，请检查服务器是否正常运行');
     } finally {
       this.setPromptPreviewLoading(false);
+      this.promptPreviewAbortController = null;
     }
   }
 

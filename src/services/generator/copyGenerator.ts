@@ -127,7 +127,6 @@ export class CopyGenerator {
       metadata: {
         articleType: '其他',
         tone: '轻松',
-        platform: '通用',
         hasEmoji: false,
         hasParagraphs: true,
         hasHashtag: false,
@@ -227,7 +226,6 @@ export class CopyGenerator {
     const metadata: CopywritingMetadata = {
       articleType: request.articleType,
       tone: request.tone,
-      platform: request.platform ?? '通用',
       hasEmoji: request.useEmoji,
       hasParagraphs: request.useParagraphs,
       hasHashtag: request.useHashtag,

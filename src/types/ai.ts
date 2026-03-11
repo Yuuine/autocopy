@@ -4,7 +4,8 @@ export type AIProvider =
   | 'anthropic'
   | 'wenxin'
   | 'qwen'
-  | 'gemini';
+  | 'gemini'
+  | 'moonshot';
 
 export interface AIMessage {
   role: 'system' | 'user' | 'assistant';
