@@ -9,13 +9,13 @@ export interface ProviderDefaultConfig {
 export const PROVIDER_DEFAULTS: Record<AIProvider, ProviderDefaultConfig> = {
   deepseek: {
     baseUrl: 'https://api.deepseek.com',
-    models: ['deepseek-chat', 'deepseek-coder', 'deepseek-reasoner'],
+    models: ['deepseek-chat', 'deepseek-reasoner'],
     defaultModel: 'deepseek-chat',
   },
   moonshot: {
     baseUrl: 'https://api.moonshot.cn/v1',
     models: ['kimi-k2.5', 'kimi-k2-turbo-preview', 'kimi-k2-0711-preview'],
-    defaultModel: 'kimi-k2-turbo-preview',
+    defaultModel: 'kimi-k2.5',
   },
 };
 

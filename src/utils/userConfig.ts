@@ -290,6 +290,13 @@ export function getInstancesByProvider(provider: AIProvider): ProviderInstance[]
   return Object.values(config.instances).filter(instance => instance.provider === provider);
 }
 
+export function hasModelInstance(provider: AIProvider, model: string): boolean {
+  const config = loadUserConfig();
+  return Object.values(config.instances).some(
+    instance => instance.provider === provider && instance.model === model
+  );
+}
+
 export function hasInstance(instanceId: ProviderInstanceId): boolean {
   const config = loadUserConfig();
   return !!config.instances[instanceId]?.enabled;

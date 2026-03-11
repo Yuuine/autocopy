@@ -140,9 +140,9 @@ export class ProviderConfigManager {
                 <input type="hidden" id="editInstanceId" />
                 <input type="hidden" id="providerId" />
                 <div class="form-group">
-                  <label for="instanceName">实例名称 <span class="required">*</span></label>
-                  <input type="text" id="instanceName" name="instanceName" required 
-                         placeholder="例如：Kimi K2.5、DeepSeek Coder" autocomplete="off" />
+                  <label for="instanceName">实例名称</label>
+                  <input type="text" id="instanceName" name="instanceName" 
+                         placeholder="留空则使用模型名称" autocomplete="off" />
                 </div>
                 <div class="form-group">
                   <label for="apiKey">API 密钥 <span class="required">*</span></label>
@@ -682,11 +682,6 @@ export class ProviderConfigManager {
     const secretKey = (form.querySelector('#secretKey') as HTMLInputElement).value;
     const model = (form.querySelector('#modelSelect') as HTMLSelectElement).value;
     const baseUrl = (form.querySelector('#baseUrl') as HTMLInputElement).value;
-
-    if (!instanceName) {
-      toast.warning('请输入实例名称');
-      return;
-    }
 
     try {
       let response: Response;

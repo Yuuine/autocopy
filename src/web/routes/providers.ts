@@ -8,6 +8,7 @@ import {
   setDefaultInstance,
   getDefaultInstanceId,
   hasInstance,
+  hasModelInstance,
   getAllInstanceSummaries,
   getInstanceSummary,
   getInstance,
@@ -29,15 +30,15 @@ const PROVIDER_INFO: Record<AIProvider, {
 }> = {
   deepseek: {
     name: 'DeepSeek',
-    description: 'DeepSeek-V3.2 (128K上下文) 大模型服务',
+    description: 'DeepSeek-V3.2 (128K上下文)，chat为非思考模式，reasoner为思考模式',
     defaultModel: 'deepseek-chat',
     requiresSecretKey: false,
-    models: ['deepseek-chat', 'deepseek-coder', 'deepseek-reasoner'],
+    models: ['deepseek-chat', 'deepseek-reasoner'],
   },
   moonshot: {
     name: 'Kimi (Moonshot)',
     description: 'Moonshot AI Kimi 系列模型',
-    defaultModel: 'kimi-k2-turbo-preview',
+    defaultModel: 'kimi-k2.5',
     requiresSecretKey: false,
     models: [
       'kimi-k2.5',
@@ -128,12 +129,18 @@ router.post('/instances', (req: Request, res: Response): void => {
     throw createError(`${providerInfo.name} 需要提供 Secret Key`, 400);
   }
 
-  const instanceName = name?.trim() || `${providerInfo.name} - ${model || providerInfo.defaultModel}`;
+  const instanceModel = model?.trim() || providerInfo.defaultModel;
+  
+  if (hasModelInstance(provider as AIProvider, instanceModel)) {
+    throw createError(`模型 ${instanceModel} 已存在配置，同一模型只能配置一个实例`, 400);
+  }
+
+  const instanceName = name?.trim() || instanceModel;
   
   const instance = addInstance(provider as AIProvider, instanceName, apiKey, {
     secretKey,
     baseUrl,
-    model: model ?? providerInfo.defaultModel,
+    model: instanceModel,
     parameters,
   });
 
@@ -152,19 +159,51 @@ router.put('/instances/:instanceId', (req: Request, res: Response): void => {
     throw createError('缺少实例ID', 400);
   }
 
-  if (!hasInstance(instanceId)) {
+  const currentInstance = getInstance(instanceId);
+  
+  if (!currentInstance) {
     throw createError('实例不存在', 404);
   }
 
-  const instance = updateInstance(instanceId, {
-    name,
-    apiKey,
-    secretKey,
-    baseUrl,
-    model,
-    parameters,
-    enabled,
-  });
+  if (model !== undefined && model !== currentInstance.model) {
+    if (hasModelInstance(currentInstance.provider, model)) {
+      throw createError(`模型 ${model} 已存在配置，同一模型只能配置一个实例`, 400);
+    }
+  }
+
+  const updateData: {
+    name?: string;
+    apiKey?: string;
+    secretKey?: string;
+    baseUrl?: string;
+    model?: string;
+    parameters?: ModelParameters;
+    enabled?: boolean;
+  } = {};
+  
+  if (name !== undefined) {
+    updateData.name = name.trim() || model || currentInstance.model;
+  }
+  if (apiKey !== undefined) {
+    updateData.apiKey = apiKey;
+  }
+  if (secretKey !== undefined) {
+    updateData.secretKey = secretKey;
+  }
+  if (baseUrl !== undefined) {
+    updateData.baseUrl = baseUrl;
+  }
+  if (model !== undefined) {
+    updateData.model = model;
+  }
+  if (parameters !== undefined) {
+    updateData.parameters = parameters;
+  }
+  if (enabled !== undefined) {
+    updateData.enabled = enabled;
+  }
+
+  const instance = updateInstance(instanceId, updateData);
 
   if (!instance) {
     throw createError('更新实例失败', 500);
