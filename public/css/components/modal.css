@@ -120,12 +120,12 @@
   background: var(--color-bg-secondary);
   border-radius: var(--radius-lg);
   width: 100%;
-  max-width: var(--modal-max-width-lg);
+  max-width: 720px;
   max-height: 85vh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  box-shadow: var(--shadow-lg);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
   transform: scale(0.95);
   transition: transform var(--transition-normal);
 }
@@ -138,14 +138,17 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: var(--spacing-xl) var(--spacing-2xl);
+  padding: var(--spacing-2xl) var(--spacing-3xl);
   border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
+  background: linear-gradient(180deg, var(--color-bg-secondary) 0%, var(--color-bg-tertiary) 100%);
 }
 
 .config-modal-header h2 {
-  font-size: var(--font-size-xl);
+  font-size: var(--font-size-2xl);
   font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  letter-spacing: -0.02em;
 }
 
 .config-modal-close {
@@ -174,14 +177,15 @@
 }
 
 .config-modal-body {
-  padding: var(--spacing-2xl);
+  padding: var(--spacing-3xl);
   overflow-y: auto;
   flex: 1;
+  background: var(--color-bg-primary);
 }
 
 .loading-placeholder {
   text-align: center;
-  padding: 40px var(--spacing-2xl);
+  padding: 60px var(--spacing-2xl);
   color: var(--color-text-secondary);
   font-size: var(--font-size-base);
 }
@@ -189,20 +193,44 @@
 .provider-list {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-2xl);
-  padding: var(--spacing-md) 0;
+  gap: var(--spacing-xl);
+}
+
+.provider-form {
+  padding: var(--spacing-xl);
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
 }
 
 .provider-form h3 {
-  font-size: var(--font-size-lg);
+  font-size: var(--font-size-xl);
   font-weight: var(--font-weight-semibold);
   margin-bottom: var(--spacing-2xl);
+  color: var(--color-text-primary);
+  padding-bottom: var(--spacing-lg);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.provider-form .form-group {
+  margin-bottom: var(--spacing-xl);
+}
+
+.provider-form .form-group:last-of-type {
+  margin-bottom: 0;
 }
 
 .provider-form .form-actions {
   padding-top: var(--spacing-2xl);
+  margin-top: var(--spacing-xl);
+  border-top: 1px solid var(--color-border);
   flex-wrap: wrap;
-  gap: var(--spacing-md);
+  gap: var(--spacing-lg);
+  justify-content: flex-end;
+}
+
+.provider-form .form-actions .btn {
+  min-width: 100px;
 }
 
 .prompt-preview-modal {

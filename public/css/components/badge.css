@@ -1,6 +1,6 @@
 .status-badge {
-  font-size: var(--font-size-xs);
-  padding: 4px 10px;
+  font-size: 11px;
+  padding: 2px 8px;
   border-radius: var(--radius-full);
   font-weight: var(--font-weight-medium);
   background: var(--color-bg-tertiary);
@@ -8,18 +8,17 @@
 }
 
 .status-badge.configured {
-  background: rgba(52, 199, 89, 0.12);
+  background: rgba(52, 199, 89, 0.1);
   color: var(--color-success);
 }
 
 .default-badge {
-  background: linear-gradient(135deg, var(--color-primary) 0%, #0056b3 100%);
+  background: var(--color-primary);
   color: white;
-  padding: 4px 10px;
+  padding: 2px 8px;
   border-radius: var(--radius-full);
-  font-size: var(--font-size-xs);
+  font-size: 11px;
   font-weight: var(--font-weight-medium);
-  box-shadow: 0 1px 3px rgba(0, 113, 227, 0.2);
 }
 
 .model-tag {

@@ -44,10 +44,10 @@
 }
 
 .btn-sm {
-  padding: 8px 16px;
+  padding: 6px 14px;
   font-size: var(--font-size-sm);
   font-family: inherit;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   border: none;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -58,29 +58,24 @@
 .btn-configure {
   background: var(--color-primary);
   color: white;
-  box-shadow: 0 1px 3px rgba(0, 113, 227, 0.2);
 }
 
 .btn-configure:hover {
   background: var(--color-primary-hover);
-  box-shadow: 0 2px 6px rgba(0, 113, 227, 0.3);
-  transform: translateY(-1px);
 }
 
 .btn-parameters {
   background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
   color: white;
-  box-shadow: 0 1px 3px rgba(99, 102, 241, 0.2);
 }
 
 .btn-parameters:hover {
-  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.3);
-  transform: translateY(-1px);
+  opacity: 0.9;
 }
 
 .btn-set-default {
-  background: var(--color-bg-secondary);
-  color: var(--color-text-primary);
+  background: transparent;
+  color: var(--color-text-secondary);
   border: 1px solid var(--color-border);
 }
 
@@ -91,14 +86,14 @@
 }
 
 .btn-danger {
-  background: rgba(255, 59, 48, 0.08);
+  background: transparent;
   color: var(--color-error);
   border: 1px solid transparent;
 }
 
 .btn-danger:hover {
-  background: rgba(255, 59, 48, 0.15);
-  border-color: rgba(255, 59, 48, 0.3);
+  background: rgba(255, 59, 48, 0.08);
+  border-color: rgba(255, 59, 48, 0.2);
 }
 
 .btn-settings {
