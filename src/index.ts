@@ -6,41 +6,55 @@ import type {
   CopywritingResult,
   ArticleType,
   Tone,
-  AIProvider
+  ProviderInstanceId
 } from './types';
 import { AIServiceFactory } from './services/ai';
 import { CopyGenerator } from './services/generator';
-import { getDecryptedProviderConfig } from './utils/userConfig';
+import { getInstanceDecrypted, getDefaultInstanceId } from './utils/userConfig';
 
 export class AutoCopy {
-  private provider: AIProvider;
+  private instanceId: ProviderInstanceId;
 
-  constructor(provider?: AIProvider) {
-    this.provider = provider ?? 'deepseek';
+  constructor(instanceId?: ProviderInstanceId) {
+    this.instanceId = instanceId ?? '';
   }
 
   async generate(
     request: CopywritingRequest,
     options?: GenerationOptions
   ): Promise<GenerationResult> {
-    const config = getDecryptedProviderConfig(this.provider);
+    const effectiveInstanceId = this.instanceId || getDefaultInstanceId();
+    
+    if (!effectiveInstanceId) {
+      throw new Error('未配置任何模型实例，请先在前端配置 API 密钥');
+    }
+    
+    const config = getInstanceDecrypted(effectiveInstanceId);
     
     if (!config) {
-      throw new Error(`模型 ${this.provider} 未配置，请先在前端配置 API 密钥`);
+      throw new Error(`模型实例 ${effectiveInstanceId} 未配置或已禁用`);
+    }
+    
+    const instance = getInstanceDecrypted(effectiveInstanceId);
+    if (!instance) {
+      throw new Error(`无法获取模型实例 ${effectiveInstanceId} 的配置`);
     }
     
     const serviceConfig: AIProviderConfig = {
       apiKey: config.apiKey,
+      model: config.model ?? '',
     };
     
     if (config.baseUrl) {
       serviceConfig.baseUrl = config.baseUrl;
     }
-    if (config.model) {
-      serviceConfig.model = config.model;
+    
+    const instanceData = await import('./utils/userConfig').then(m => m.getInstance(effectiveInstanceId));
+    if (!instanceData) {
+      throw new Error(`无法获取模型实例 ${effectiveInstanceId}`);
     }
     
-    const aiService = AIServiceFactory.createService(this.provider, serviceConfig);
+    const aiService = AIServiceFactory.createService(instanceData.provider, serviceConfig);
     const generator = new CopyGenerator(aiService);
     
     return generator.generate(request, options);
@@ -53,12 +67,12 @@ export class AutoCopy {
     return this.generate(request, { count });
   }
 
-  setProvider(provider: AIProvider): void {
-    this.provider = provider;
+  setInstance(instanceId: ProviderInstanceId): void {
+    this.instanceId = instanceId;
   }
 
-  getProvider(): AIProvider {
-    return this.provider;
+  getInstance(): ProviderInstanceId {
+    return this.instanceId;
   }
 }
 
@@ -69,22 +83,26 @@ export {
   type CopywritingResult,
   type ArticleType,
   type Tone,
-  type AIProvider,
   type AIProviderConfig,
+  type ProviderInstanceId,
 };
 
 export { AIServiceFactory } from './services/ai';
 export { CopyGenerator } from './services/generator';
 export { 
-  getDecryptedProviderConfig, 
-  setProviderConfig, 
-  getDefaultProvider,
-  hasProviderConfig 
+  getInstanceDecrypted, 
+  addInstance,
+  updateInstance,
+  removeInstance,
+  getDefaultInstanceId,
+  setDefaultInstance,
+  getAllInstanceSummaries,
+  hasInstance 
 } from './utils/userConfig';
-export { PROVIDER_DEFAULTS } from './config/ai-providers';
+export { PROVIDER_DEFAULTS, getProviderModels } from './config/ai-providers';
 
-export function createAutoCopy(provider?: AIProvider): AutoCopy {
-  return new AutoCopy(provider);
+export function createAutoCopy(instanceId?: ProviderInstanceId): AutoCopy {
+  return new AutoCopy(instanceId);
 }
 
 export default AutoCopy;

@@ -2,16 +2,15 @@ import { Router, Request, Response } from 'express';
 import type { AIProvider, ModelParameters } from '../../types';
 import { AIServiceFactory } from '../../services/ai';
 import {
-  setProviderConfig,
-  removeProviderConfig,
-  setDefaultProvider,
-  getDefaultProvider,
-  getEnabledProviders,
-  hasProviderConfig,
-  getAllProviderSummaries,
-  getProviderConfigSummary,
-  setProviderParameters,
-  getProviderParameters,
+  addInstance,
+  updateInstance,
+  removeInstance,
+  setDefaultInstance,
+  getDefaultInstanceId,
+  hasInstance,
+  getAllInstanceSummaries,
+  getInstanceSummary,
+  getInstance,
   setGlobalParameters,
   getGlobalParameters,
   getEffectiveParameters,
@@ -33,42 +32,7 @@ const PROVIDER_INFO: Record<AIProvider, {
     description: 'DeepSeek-V3.2 (128K上下文) 大模型服务',
     defaultModel: 'deepseek-chat',
     requiresSecretKey: false,
-    models: ['deepseek-chat', 'deepseek-reasoner'],
-  },
-  openai: {
-    name: 'OpenAI',
-    description: 'OpenAI GPT 系列模型',
-    defaultModel: 'gpt-4',
-    requiresSecretKey: false,
-    models: ['gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo'],
-  },
-  anthropic: {
-    name: 'Claude',
-    description: 'Anthropic Claude 系列模型',
-    defaultModel: 'claude-3-opus-20240229',
-    requiresSecretKey: false,
-    models: ['claude-3-opus-20240229', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307'],
-  },
-  wenxin: {
-    name: '文心一言',
-    description: '百度文心大模型服务',
-    defaultModel: 'ernie-bot-4',
-    requiresSecretKey: true,
-    models: ['ernie-bot-4', 'ernie-bot', 'ernie-bot-turbo'],
-  },
-  qwen: {
-    name: '通义千问',
-    description: '阿里云通义大模型服务',
-    defaultModel: 'qwen-turbo',
-    requiresSecretKey: false,
-    models: ['qwen-turbo', 'qwen-plus', 'qwen-max'],
-  },
-  gemini: {
-    name: 'Gemini',
-    description: 'Google Gemini 大模型服务',
-    defaultModel: 'gemini-pro',
-    requiresSecretKey: false,
-    models: ['gemini-pro', 'gemini-pro-vision'],
+    models: ['deepseek-chat', 'deepseek-coder', 'deepseek-reasoner'],
   },
   moonshot: {
     name: 'Kimi (Moonshot)',
@@ -78,56 +42,75 @@ const PROVIDER_INFO: Record<AIProvider, {
     models: [
       'kimi-k2.5',
       'kimi-k2-turbo-preview',
-      'kimi-k2-thinking-turbo',
-      'kimi-k2-thinking',
-      'moonshot-v1-8k',
-      'moonshot-v1-32k',
-      'moonshot-v1-128k',
-      'moonshot-v1-auto',
+      'kimi-k2-0711-preview',
     ],
   },
 };
 
 router.get('/', (_req: Request, res: Response): void => {
+  const instances = getAllInstanceSummaries();
+  const defaultInstanceId = getDefaultInstanceId();
+  
   const providers = Object.entries(PROVIDER_INFO).map(([key, info]) => {
-    const summary = getProviderConfigSummary(key as AIProvider);
+    const providerInstances = instances.filter(i => i.provider === key);
     return {
       id: key as AIProvider,
       ...info,
-      configured: hasProviderConfig(key as AIProvider),
-      parameters: summary?.parameters,
+      configured: providerInstances.length > 0,
+      instances: providerInstances,
     };
   });
 
   res.json({
     providers,
-    defaultProvider: getDefaultProvider(),
-    enabledProviders: getEnabledProviders(),
+    instances,
+    defaultInstanceId,
     globalParameters: getGlobalParameters(),
   });
 });
 
-router.get('/:provider', (req: Request, res: Response): void => {
-  const provider = req.params['provider'] as AIProvider;
+router.get('/providers', (_req: Request, res: Response): void => {
+  const providers = Object.entries(PROVIDER_INFO).map(([key, info]) => ({
+    id: key as AIProvider,
+    ...info,
+  }));
   
-  if (!PROVIDER_INFO[provider]) {
-    throw createError('不支持的模型提供商', 400);
-  }
+  res.json({ providers });
+});
 
-  const summary = getProviderConfigSummary(provider);
+router.get('/instances', (_req: Request, res: Response): void => {
+  const instances = getAllInstanceSummaries();
+  const defaultInstanceId = getDefaultInstanceId();
   
   res.json({
-    id: provider,
-    ...PROVIDER_INFO[provider],
-    config: summary,
+    instances,
+    defaultInstanceId,
   });
 });
 
-router.post('/:provider', (req: Request, res: Response): void => {
-  const provider = req.params['provider'] as AIProvider;
-  const { apiKey, secretKey, baseUrl, model, parameters } = req.body;
+router.get('/instances/:instanceId', (req: Request, res: Response): void => {
+  const { instanceId } = req.params;
+  
+  if (!instanceId) {
+    throw createError('缺少实例ID', 400);
+  }
+  
+  const summary = getInstanceSummary(instanceId);
+  
+  if (!summary) {
+    throw createError('实例不存在', 404);
+  }
+  
+  res.json({
+    success: true,
+    instance: summary,
+  });
+});
 
-  if (!PROVIDER_INFO[provider]) {
+router.post('/instances', (req: Request, res: Response): void => {
+  const { provider, name, apiKey, secretKey, baseUrl, model, parameters } = req.body;
+
+  if (!provider || !PROVIDER_INFO[provider as AIProvider]) {
     throw createError('不支持的模型提供商', 400);
   }
 
@@ -135,99 +118,150 @@ router.post('/:provider', (req: Request, res: Response): void => {
     throw createError('API 密钥不能为空', 400);
   }
 
-  if (!validateApiKeyFormat(provider, apiKey)) {
+  if (!validateApiKeyFormat(provider as AIProvider, apiKey)) {
     throw createError('API 密钥格式不正确', 400);
   }
 
-  if (PROVIDER_INFO[provider].requiresSecretKey && !secretKey) {
-    throw createError(`${PROVIDER_INFO[provider].name} 需要提供 Secret Key`, 400);
+  const providerInfo = PROVIDER_INFO[provider as AIProvider];
+  
+  if (providerInfo.requiresSecretKey && !secretKey) {
+    throw createError(`${providerInfo.name} 需要提供 Secret Key`, 400);
   }
 
-  const config = setProviderConfig(provider, apiKey, {
+  const instanceName = name?.trim() || `${providerInfo.name} - ${model || providerInfo.defaultModel}`;
+  
+  const instance = addInstance(provider as AIProvider, instanceName, apiKey, {
     secretKey,
     baseUrl,
-    model: model ?? PROVIDER_INFO[provider].defaultModel,
+    model: model ?? providerInfo.defaultModel,
     parameters,
   });
 
   res.json({
     success: true,
-    message: `${PROVIDER_INFO[provider].name} 配置已保存`,
-    config: {
-      provider,
-      enabled: config.enabled,
-      apiKeyMasked: config.apiKey,
-      model: config.model,
-      parameters: config.parameters,
-    },
+    message: `${instanceName} 配置已保存`,
+    instance,
   });
 });
 
-router.delete('/:provider', (req: Request, res: Response): void => {
-  const provider = req.params['provider'] as AIProvider;
+router.put('/instances/:instanceId', (req: Request, res: Response): void => {
+  const { instanceId } = req.params;
+  const { name, apiKey, secretKey, baseUrl, model, parameters, enabled } = req.body;
 
-  if (!PROVIDER_INFO[provider]) {
-    throw createError('不支持的模型提供商', 400);
+  if (!instanceId) {
+    throw createError('缺少实例ID', 400);
   }
 
-  const removed = removeProviderConfig(provider);
+  if (!hasInstance(instanceId)) {
+    throw createError('实例不存在', 404);
+  }
+
+  const instance = updateInstance(instanceId, {
+    name,
+    apiKey,
+    secretKey,
+    baseUrl,
+    model,
+    parameters,
+    enabled,
+  });
+
+  if (!instance) {
+    throw createError('更新实例失败', 500);
+  }
+
+  res.json({
+    success: true,
+    message: `${instance.name} 配置已更新`,
+    instance,
+  });
+});
+
+router.delete('/instances/:instanceId', (req: Request, res: Response): void => {
+  const { instanceId } = req.params;
+
+  if (!instanceId) {
+    throw createError('缺少实例ID', 400);
+  }
+
+  const instance = getInstance(instanceId);
+  
+  if (!instance) {
+    throw createError('实例不存在', 404);
+  }
+
+  const removed = removeInstance(instanceId);
 
   if (!removed) {
-    throw createError('该模型配置不存在', 404);
+    throw createError('删除实例失败', 500);
   }
 
   res.json({
     success: true,
-    message: `${PROVIDER_INFO[provider].name} 配置已删除`,
+    message: `${instance.name} 配置已删除`,
   });
 });
 
-router.post('/:provider/default', (req: Request, res: Response): void => {
-  const provider = req.params['provider'] as AIProvider;
+router.post('/instances/:instanceId/default', (req: Request, res: Response): void => {
+  const { instanceId } = req.params;
 
-  if (!PROVIDER_INFO[provider]) {
-    throw createError('不支持的模型提供商', 400);
+  if (!instanceId) {
+    throw createError('缺少实例ID', 400);
   }
 
-  const success = setDefaultProvider(provider);
+  const instance = getInstance(instanceId);
+  
+  if (!instance) {
+    throw createError('实例不存在或未启用', 404);
+  }
+
+  const success = setDefaultInstance(instanceId);
 
   if (!success) {
-    throw createError('该模型未配置或未启用，无法设为默认', 400);
+    throw createError('设置默认实例失败', 400);
   }
 
   res.json({
     success: true,
-    message: `${PROVIDER_INFO[provider].name} 已设为默认模型`,
-    defaultProvider: provider,
+    message: `${instance.name} 已设为默认模型`,
+    defaultInstanceId: instanceId,
   });
 });
 
-router.post('/:provider/validate', async (req: Request, res: Response): Promise<void> => {
-  const provider = req.params['provider'] as AIProvider;
+router.post('/instances/:instanceId/validate', async (req: Request, res: Response): Promise<void> => {
+  const { instanceId } = req.params;
   const { apiKey, secretKey, baseUrl } = req.body;
 
-  if (!PROVIDER_INFO[provider]) {
-    throw createError('不支持的模型提供商', 400);
+  if (!instanceId) {
+    throw createError('缺少实例ID', 400);
   }
 
-  if (!apiKey) {
+  const instance = getInstance(instanceId);
+  
+  if (!instance) {
+    throw createError('实例不存在', 404);
+  }
+
+  const testApiKey = apiKey || instance.apiKey;
+  
+  if (!testApiKey) {
     throw createError('API 密钥不能为空', 400);
   }
 
   try {
     const testConfig: { apiKey: string; secretKey?: string; baseUrl?: string; model: string } = {
-      apiKey,
-      model: PROVIDER_INFO[provider].defaultModel,
+      apiKey: testApiKey,
+      model: instance.model || PROVIDER_INFO[instance.provider].defaultModel,
     };
     
-    if (secretKey) {
-      testConfig.secretKey = secretKey;
+    if (secretKey || instance.secretKey) {
+      testConfig.secretKey = secretKey || instance.secretKey;
     }
-    if (baseUrl) {
-      testConfig.baseUrl = baseUrl;
+    if (baseUrl || instance.baseUrl) {
+      testConfig.baseUrl = baseUrl || instance.baseUrl;
     }
 
-    const service = AIServiceFactory.createService(provider, testConfig);
+    const service = AIServiceFactory.createService(instance.provider, testConfig);
     
     await service.chat({
       messages: [{ role: 'user', content: 'Hi' }],
@@ -247,42 +281,91 @@ router.post('/:provider/validate', async (req: Request, res: Response): Promise<
   }
 });
 
-router.get('/:provider/parameters', (req: Request, res: Response): void => {
-  const provider = req.params['provider'] as AIProvider;
-  
-  if (!PROVIDER_INFO[provider]) {
+router.post('/validate', async (req: Request, res: Response): Promise<void> => {
+  const { provider, apiKey, secretKey, baseUrl, model } = req.body;
+
+  if (!provider || !PROVIDER_INFO[provider as AIProvider]) {
     throw createError('不支持的模型提供商', 400);
   }
 
-  const parameters = getProviderParameters(provider);
+  if (!apiKey) {
+    throw createError('API 密钥不能为空', 400);
+  }
+
+  try {
+    const providerInfo = PROVIDER_INFO[provider as AIProvider];
+    const testConfig: { apiKey: string; secretKey?: string; baseUrl?: string; model: string } = {
+      apiKey,
+      model: model || providerInfo.defaultModel,
+    };
+    
+    if (secretKey) {
+      testConfig.secretKey = secretKey;
+    }
+    if (baseUrl) {
+      testConfig.baseUrl = baseUrl;
+    }
+
+    const service = AIServiceFactory.createService(provider as AIProvider, testConfig);
+    
+    await service.chat({
+      messages: [{ role: 'user', content: 'Hi' }],
+      maxTokens: 10,
+    });
+
+    res.json({
+      success: true,
+      message: 'API 密钥验证成功',
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '验证失败';
+    res.status(400).json({
+      success: false,
+      message: `API 密钥验证失败: ${message}`,
+    });
+  }
+});
+
+router.get('/instances/:instanceId/parameters', (req: Request, res: Response): void => {
+  const { instanceId } = req.params;
+  
+  if (!instanceId) {
+    throw createError('缺少实例ID', 400);
+  }
+
+  const instance = getInstance(instanceId);
+  
+  if (!instance) {
+    throw createError('实例不存在', 404);
+  }
   
   res.json({
     success: true,
-    parameters,
+    parameters: instance.parameters || null,
   });
 });
 
-router.put('/:provider/parameters', (req: Request, res: Response): void => {
-  const provider = req.params['provider'] as AIProvider;
+router.put('/instances/:instanceId/parameters', (req: Request, res: Response): void => {
+  const { instanceId } = req.params;
   const parameters = req.body as ModelParameters;
   
-  if (!PROVIDER_INFO[provider]) {
-    throw createError('不支持的模型提供商', 400);
+  if (!instanceId) {
+    throw createError('缺少实例ID', 400);
   }
 
-  if (!hasProviderConfig(provider)) {
-    throw createError('该模型未配置，请先配置 API 密钥', 400);
+  if (!hasInstance(instanceId)) {
+    throw createError('实例不存在', 404);
   }
 
-  const success = setProviderParameters(provider, parameters);
+  const instance = updateInstance(instanceId, { parameters });
   
-  if (!success) {
+  if (!instance) {
     throw createError('保存参数失败', 500);
   }
 
   res.json({
     success: true,
-    message: `${PROVIDER_INFO[provider].name} 参数已保存`,
+    message: `${instance.name} 参数已保存`,
     parameters,
   });
 });
@@ -308,24 +391,23 @@ router.put('/parameters/global', (req: Request, res: Response): void => {
   });
 });
 
-router.get('/:provider/parameters/effective', (req: Request, res: Response): void => {
-  const provider = req.params['provider'] as AIProvider;
+router.get('/instances/:instanceId/parameters/effective', (req: Request, res: Response): void => {
+  const { instanceId } = req.params;
   
-  if (!PROVIDER_INFO[provider]) {
-    throw createError('不支持的模型提供商', 400);
+  if (!instanceId) {
+    throw createError('缺少实例ID', 400);
   }
 
-  const parameters = getEffectiveParameters(provider);
+  if (!hasInstance(instanceId)) {
+    throw createError('实例不存在', 404);
+  }
+
+  const parameters = getEffectiveParameters(instanceId);
   
   res.json({
     success: true,
     parameters,
   });
-});
-
-router.get('/summaries', (_req: Request, res: Response): void => {
-  const summaries = getAllProviderSummaries();
-  res.json({ summaries });
 });
 
 export default router;

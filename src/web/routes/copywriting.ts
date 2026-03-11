@@ -1,34 +1,40 @@
 import { Router, Request, Response } from 'express';
 import type { CopywritingRequest } from '../../index';
-import type { AIProvider } from '../../types';
+import type { ProviderInstanceId } from '../../types';
 import { AIServiceFactory } from '../../services/ai';
 import { CopyGenerator } from '../../services/generator';
 import type { GenerationOptions } from '../../types';
-import { getDecryptedProviderConfig, getDefaultProvider, hasProviderConfig, getCustomTones, addCustomTone, updateCustomTone, deleteCustomTone, getCustomToneById } from '../../utils/userConfig';
+import { getInstanceDecrypted, getDefaultInstanceId, hasInstance, getInstance, getCustomTones, addCustomTone, updateCustomTone, deleteCustomTone, getCustomToneById } from '../../utils/userConfig';
 import { createError } from '../middleware';
 import { buildSystemPrompt, buildUserPrompt, buildMultiVersionPrompt } from '../../templates';
 
 const router = Router();
 
 interface GenerateRequestBody extends CopywritingRequest {
-  provider?: AIProvider;
+  instanceId?: ProviderInstanceId;
   count?: number;
   customToneId?: string;
 }
 
-async function generateWithProvider(
-  provider: AIProvider,
+async function generateWithInstance(
+  instanceId: ProviderInstanceId,
   request: CopywritingRequest,
   options?: { count?: number }
 ) {
-  const config = getDecryptedProviderConfig(provider);
+  const config = getInstanceDecrypted(instanceId);
   
   if (!config) {
-    throw new Error(`模型 ${provider} 未配置或未启用`);
+    throw new Error(`模型实例 ${instanceId} 未配置或已禁用`);
   }
   
-  const serviceConfig: { apiKey: string; secretKey?: string; baseUrl?: string; model?: string } = {
+  const instance = getInstance(instanceId);
+  if (!instance) {
+    throw new Error(`无法获取模型实例 ${instanceId}`);
+  }
+  
+  const serviceConfig: { apiKey: string; secretKey?: string; baseUrl?: string; model?: string | undefined } = {
     apiKey: config.apiKey,
+    model: config.model ?? undefined,
   };
   
   if (config.secretKey) {
@@ -37,11 +43,8 @@ async function generateWithProvider(
   if (config.baseUrl) {
     serviceConfig.baseUrl = config.baseUrl;
   }
-  if (config.model) {
-    serviceConfig.model = config.model;
-  }
   
-  const aiService = AIServiceFactory.createService(provider, serviceConfig);
+  const aiService = AIServiceFactory.createService(instance.provider, serviceConfig);
   const generator = new CopyGenerator(aiService);
   
   const genOptions: GenerationOptions | undefined = options?.count !== undefined 
@@ -64,7 +67,7 @@ router.post('/generate', async (req: Request, res: Response): Promise<void> => {
       keywords,
       additionalRequirements,
       count,
-      provider: requestedProvider,
+      instanceId: requestedInstanceId,
       customToneId,
     } = req.body as GenerateRequestBody;
 
@@ -76,11 +79,11 @@ router.post('/generate', async (req: Request, res: Response): Promise<void> => {
       throw createError('字数要求必须在 10-2000 之间', 400);
     }
 
-    const provider: AIProvider = requestedProvider ?? getDefaultProvider();
+    const instanceId: ProviderInstanceId = requestedInstanceId ?? getDefaultInstanceId();
     
-    if (!hasProviderConfig(provider)) {
-      const defaultConfigured = hasProviderConfig(getDefaultProvider());
-      if (!defaultConfigured) {
+    if (!instanceId || !hasInstance(instanceId)) {
+      const defaultId = getDefaultInstanceId();
+      if (!defaultId || !hasInstance(defaultId)) {
         throw createError(
           '请先配置至少一个模型服务。前往"模型配置"页面添加您的 API 密钥。',
           400
@@ -108,13 +111,13 @@ router.post('/generate', async (req: Request, res: Response): Promise<void> => {
       request.customToneId = customToneId;
     }
 
-    const result = await generateWithProvider(provider, request, {
+    const result = await generateWithInstance(instanceId, request, {
       count: count ?? 3,
     });
 
     res.json({
       ...result,
-      provider,
+      instanceId,
     });
   } catch (error) {
     if (error instanceof Error) {
@@ -220,7 +223,7 @@ router.post('/preview', (req: Request, res: Response): void => {
 });
 
 interface GenerateWithPromptBody {
-  provider?: AIProvider;
+  instanceId?: ProviderInstanceId;
   systemPrompt: string;
   userPrompt: string;
   count?: number;
@@ -231,7 +234,7 @@ interface GenerateWithPromptBody {
 router.post('/generate-with-prompt', async (req: Request, res: Response): Promise<void> => {
   try {
     const {
-      provider: requestedProvider,
+      instanceId: requestedInstanceId,
       systemPrompt,
       userPrompt,
       count,
@@ -243,23 +246,29 @@ router.post('/generate-with-prompt', async (req: Request, res: Response): Promis
       throw createError('系统提示词和用户提示词不能为空', 400);
     }
 
-    const provider: AIProvider = requestedProvider ?? getDefaultProvider();
+    const instanceId: ProviderInstanceId = requestedInstanceId ?? getDefaultInstanceId();
     
-    if (!hasProviderConfig(provider)) {
+    if (!instanceId || !hasInstance(instanceId)) {
       throw createError(
         '请先配置至少一个模型服务。前往"模型配置"页面添加您的 API 密钥。',
         400
       );
     }
 
-    const config = getDecryptedProviderConfig(provider);
+    const config = getInstanceDecrypted(instanceId);
     
     if (!config) {
-      throw createError(`模型 ${provider} 未配置或未启用`, 400);
+      throw createError(`模型实例 ${instanceId} 未配置或已启用`, 400);
     }
 
-    const serviceConfig: { apiKey: string; secretKey?: string; baseUrl?: string; model?: string } = {
+    const instance = getInstance(instanceId);
+    if (!instance) {
+      throw createError(`无法获取模型实例 ${instanceId}`, 400);
+    }
+
+    const serviceConfig: { apiKey: string; secretKey?: string; baseUrl?: string; model?: string | undefined } = {
       apiKey: config.apiKey,
+      model: config.model ?? undefined,
     };
     
     if (config.secretKey) {
@@ -268,11 +277,8 @@ router.post('/generate-with-prompt', async (req: Request, res: Response): Promis
     if (config.baseUrl) {
       serviceConfig.baseUrl = config.baseUrl;
     }
-    if (config.model) {
-      serviceConfig.model = config.model;
-    }
 
-    const aiService = AIServiceFactory.createService(provider, serviceConfig);
+    const aiService = AIServiceFactory.createService(instance.provider, serviceConfig);
     const generator = new CopyGenerator(aiService);
 
     const generateOptions: {
@@ -298,7 +304,7 @@ router.post('/generate-with-prompt', async (req: Request, res: Response): Promis
 
     res.json({
       ...result,
-      provider,
+      instanceId,
     });
   } catch (error) {
     if (error instanceof Error) {

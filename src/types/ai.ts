@@ -1,11 +1,20 @@
-export type AIProvider = 
-  | 'deepseek' 
-  | 'openai' 
-  | 'anthropic'
-  | 'wenxin'
-  | 'qwen'
-  | 'gemini'
-  | 'moonshot';
+export type AIProvider = 'deepseek' | 'moonshot';
+
+export type ProviderInstanceId = string;
+
+export interface ProviderInstance {
+  id: ProviderInstanceId;
+  name: string;
+  provider: AIProvider;
+  apiKey: string;
+  secretKey?: string | undefined;
+  baseUrl?: string | undefined;
+  model: string;
+  parameters?: ModelParameters;
+  enabled: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 export interface AIMessage {
   role: 'system' | 'user' | 'assistant';
@@ -27,6 +36,7 @@ export interface AIResponse {
   usage?: AIUsage;
   model: string;
   provider: AIProvider;
+  instanceId?: ProviderInstanceId;
 }
 
 export interface AIUsage {
@@ -45,12 +55,12 @@ export interface ModelParameters {
 
 export interface AIProviderConfig {
   apiKey: string;
-  secretKey?: string;
-  baseUrl?: string;
-  model?: string;
-  defaultTemperature?: number;
-  defaultMaxTokens?: number;
-  parameters?: ModelParameters;
+  secretKey?: string | undefined;
+  baseUrl?: string | undefined;
+  model?: string | undefined;
+  defaultTemperature?: number | undefined;
+  defaultMaxTokens?: number | undefined;
+  parameters?: ModelParameters | undefined;
 }
 
 export interface AIServiceError {

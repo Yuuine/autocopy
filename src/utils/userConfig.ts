@@ -1,24 +1,12 @@
 import fs from 'fs';
 import path from 'path';
-import type { AIProvider, ModelParameters } from '../types';
+import type { AIProvider, ModelParameters, ProviderInstance, ProviderInstanceId } from '../types';
 import type { CustomTone } from '../types/copywriting';
 import { encrypt, decrypt, hashApiKey } from './encryption';
 
-export interface UserProviderConfig {
-  provider: AIProvider;
-  apiKey: string;
-  secretKey?: string;
-  baseUrl?: string;
-  model?: string;
-  parameters?: ModelParameters;
-  enabled: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
 export interface UserConfig {
-  defaultProvider: AIProvider;
-  providers: Record<AIProvider, UserProviderConfig>;
+  defaultInstanceId: ProviderInstanceId;
+  instances: Record<ProviderInstanceId, ProviderInstance>;
   customTones: CustomTone[];
   globalParameters?: ModelParameters;
 }
@@ -34,8 +22,8 @@ function ensureConfigDir(): void {
 
 function getEmptyConfig(): UserConfig {
   return {
-    defaultProvider: '' as AIProvider,
-    providers: {} as Record<AIProvider, UserProviderConfig>,
+    defaultInstanceId: '',
+    instances: {},
     customTones: [],
   };
 }
@@ -68,8 +56,13 @@ export function saveUserConfig(config: UserConfig): void {
   }
 }
 
-export function setProviderConfig(
+export function generateInstanceId(provider: AIProvider): ProviderInstanceId {
+  return `${provider}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+}
+
+export function createInstance(
   provider: AIProvider,
+  name: string,
   apiKey: string,
   options?: {
     secretKey?: string;
@@ -77,105 +70,132 @@ export function setProviderConfig(
     model?: string;
     parameters?: ModelParameters;
   }
-): {
-  provider: AIProvider;
-  enabled: boolean;
-  apiKey: string;
-  secretKey?: string;
-  baseUrl?: string;
-  model?: string;
-  parameters?: ModelParameters;
-  createdAt: Date;
-  updatedAt: Date;
-} {
-  const config = loadUserConfig();
-  
+): ProviderInstance {
+  const id = generateInstanceId(provider);
   const encryptedApiKey = encrypt(apiKey);
   
-  const providerConfigBase: UserProviderConfig = {
+  const instance: ProviderInstance = {
+    id,
+    name,
     provider,
     apiKey: encryptedApiKey,
     enabled: true,
-    createdAt: config.providers[provider]?.createdAt ?? new Date(),
+    model: options?.model || '',
+    createdAt: new Date(),
     updatedAt: new Date(),
   };
   
   if (options?.secretKey) {
-    providerConfigBase.secretKey = encrypt(options.secretKey);
+    instance.secretKey = encrypt(options.secretKey);
   }
   if (options?.baseUrl) {
-    providerConfigBase.baseUrl = options.baseUrl;
-  }
-  if (options?.model) {
-    providerConfigBase.model = options.model;
+    instance.baseUrl = options.baseUrl;
   }
   if (options?.parameters) {
-    providerConfigBase.parameters = options.parameters;
+    instance.parameters = options.parameters;
   }
   
-  config.providers[provider] = providerConfigBase;
-  
-  if (!config.defaultProvider || !config.providers[config.defaultProvider]?.enabled) {
-    config.defaultProvider = provider;
-  }
-  
-  saveUserConfig(config);
-  
-  const result: {
-    provider: AIProvider;
-    enabled: boolean;
-    apiKey: string;
+  return instance;
+}
+
+export function addInstance(
+  provider: AIProvider,
+  name: string,
+  apiKey: string,
+  options?: {
     secretKey?: string;
     baseUrl?: string;
     model?: string;
     parameters?: ModelParameters;
-    createdAt: Date;
-    updatedAt: Date;
-  } = {
-    provider,
-    enabled: true,
+  }
+): ProviderInstance {
+  const config = loadUserConfig();
+  
+  const instance = createInstance(provider, name, apiKey, options);
+  config.instances[instance.id] = instance;
+  
+  if (!config.defaultInstanceId || !config.instances[config.defaultInstanceId]?.enabled) {
+    config.defaultInstanceId = instance.id;
+  }
+  
+  saveUserConfig(config);
+  
+  return {
+    ...instance,
     apiKey: hashApiKey(apiKey),
-    createdAt: providerConfigBase.createdAt,
-    updatedAt: providerConfigBase.updatedAt,
   };
-  
-  if (options?.secretKey) {
-    result.secretKey = hashApiKey(options.secretKey);
-  }
-  if (options?.baseUrl) {
-    result.baseUrl = options.baseUrl;
-  }
-  if (options?.model) {
-    result.model = options.model;
-  }
-  if (options?.parameters) {
-    result.parameters = options.parameters;
-  }
-  
-  return result;
 }
 
-export function getProviderConfig(provider: AIProvider): UserProviderConfig | null {
+export function updateInstance(
+  instanceId: ProviderInstanceId,
+  updates: {
+    name?: string;
+    apiKey?: string;
+    secretKey?: string;
+    baseUrl?: string;
+    model?: string;
+    parameters?: ModelParameters;
+    enabled?: boolean;
+  }
+): ProviderInstance | null {
   const config = loadUserConfig();
-  const providerConfig = config.providers[provider];
+  const instance = config.instances[instanceId];
   
-  if (!providerConfig || !providerConfig.enabled) {
+  if (!instance) {
     return null;
   }
   
-  const result: UserProviderConfig = {
-    ...providerConfig,
-    apiKey: decrypt(providerConfig.apiKey),
-  };
+  if (updates.name !== undefined) {
+    instance.name = updates.name;
+  }
+  if (updates.apiKey !== undefined) {
+    instance.apiKey = encrypt(updates.apiKey);
+  }
+  if (updates.secretKey !== undefined) {
+    instance.secretKey = encrypt(updates.secretKey);
+  }
+  if (updates.baseUrl !== undefined) {
+    instance.baseUrl = updates.baseUrl;
+  }
+  if (updates.model !== undefined) {
+    instance.model = updates.model;
+  }
+  if (updates.parameters !== undefined) {
+    instance.parameters = updates.parameters;
+  }
+  if (updates.enabled !== undefined) {
+    instance.enabled = updates.enabled;
+  }
   
-  if (providerConfig.secretKey) {
-    result.secretKey = decrypt(providerConfig.secretKey);
+  instance.updatedAt = new Date();
+  saveUserConfig(config);
+  
+  const result = { ...instance };
+  if (updates.apiKey !== undefined) {
+    result.apiKey = hashApiKey(updates.apiKey);
+  } else {
+    result.apiKey = maskApiKey(instance.apiKey);
   }
   
   return result;
 }
 
-export function getDecryptedProviderConfig(provider: AIProvider): {
+export function getInstance(instanceId: ProviderInstanceId): ProviderInstance | null {
+  const config = loadUserConfig();
+  const instance = config.instances[instanceId];
+  
+  if (!instance || !instance.enabled) {
+    return null;
+  }
+  
+  return {
+    ...instance,
+    apiKey: decrypt(instance.apiKey),
+    secretKey: instance.secretKey ? decrypt(instance.secretKey) : undefined,
+  };
+}
+
+export function getInstanceDecrypted(instanceId: ProviderInstanceId): {
   apiKey: string;
   secretKey?: string;
   baseUrl?: string;
@@ -183,9 +203,9 @@ export function getDecryptedProviderConfig(provider: AIProvider): {
   parameters?: ModelParameters;
 } | null {
   const config = loadUserConfig();
-  const providerConfig = config.providers[provider];
+  const instance = config.instances[instanceId];
   
-  if (!providerConfig || !providerConfig.enabled) {
+  if (!instance || !instance.enabled) {
     return null;
   }
   
@@ -196,122 +216,83 @@ export function getDecryptedProviderConfig(provider: AIProvider): {
     model?: string;
     parameters?: ModelParameters;
   } = {
-    apiKey: decrypt(providerConfig.apiKey),
+    apiKey: decrypt(instance.apiKey),
+    model: instance.model,
   };
   
-  if (providerConfig.secretKey) {
-    result.secretKey = decrypt(providerConfig.secretKey);
+  if (instance.secretKey) {
+    result.secretKey = decrypt(instance.secretKey);
   }
-  if (providerConfig.baseUrl) {
-    result.baseUrl = providerConfig.baseUrl;
+  if (instance.baseUrl) {
+    result.baseUrl = instance.baseUrl;
   }
-  if (providerConfig.model) {
-    result.model = providerConfig.model;
-  }
-  if (providerConfig.parameters) {
-    result.parameters = providerConfig.parameters;
+  if (instance.parameters) {
+    result.parameters = instance.parameters;
   }
   
   return result;
 }
 
-export function setProviderParameters(
-  provider: AIProvider, 
-  parameters: ModelParameters
-): boolean {
+export function removeInstance(instanceId: ProviderInstanceId): boolean {
   const config = loadUserConfig();
-  const providerConfig = config.providers[provider];
   
-  if (!providerConfig) {
+  if (!config.instances[instanceId]) {
     return false;
   }
   
-  providerConfig.parameters = parameters;
-  providerConfig.updatedAt = new Date();
+  delete config.instances[instanceId];
   
-  saveUserConfig(config);
-  return true;
-}
-
-export function getProviderParameters(provider: AIProvider): ModelParameters | null {
-  const config = loadUserConfig();
-  const providerConfig = config.providers[provider];
-  
-  if (!providerConfig) {
-    return null;
-  }
-  
-  return providerConfig.parameters || null;
-}
-
-export function setGlobalParameters(parameters: ModelParameters): void {
-  const config = loadUserConfig();
-  config.globalParameters = parameters;
-  saveUserConfig(config);
-}
-
-export function getGlobalParameters(): ModelParameters | null {
-  const config = loadUserConfig();
-  return config.globalParameters || null;
-}
-
-export function getEffectiveParameters(provider: AIProvider): ModelParameters {
-  const config = loadUserConfig();
-  const providerConfig = config.providers[provider];
-  
-  return {
-    ...config.globalParameters,
-    ...providerConfig?.parameters,
-  };
-}
-
-export function removeProviderConfig(provider: AIProvider): boolean {
-  const config = loadUserConfig();
-  
-  if (!config.providers[provider]) {
-    return false;
-  }
-  
-  delete config.providers[provider];
-  
-  if (config.defaultProvider === provider) {
-    const enabledProviders = Object.keys(config.providers).filter(
-      p => config.providers[p as AIProvider]?.enabled
-    ) as AIProvider[];
-    config.defaultProvider = enabledProviders[0] ?? '' as AIProvider;
+  if (config.defaultInstanceId === instanceId) {
+    const enabledInstances = Object.keys(config.instances).filter(
+      id => config.instances[id]?.enabled
+    );
+    config.defaultInstanceId = enabledInstances[0] ?? '';
   }
   
   saveUserConfig(config);
   return true;
 }
 
-export function setDefaultProvider(provider: AIProvider): boolean {
+export function setDefaultInstance(instanceId: ProviderInstanceId): boolean {
   const config = loadUserConfig();
   
-  if (!config.providers[provider]?.enabled) {
+  if (!config.instances[instanceId]?.enabled) {
     return false;
   }
   
-  config.defaultProvider = provider;
+  config.defaultInstanceId = instanceId;
   saveUserConfig(config);
   return true;
 }
 
-export function getDefaultProvider(): AIProvider {
+export function getDefaultInstance(): ProviderInstance | null {
   const config = loadUserConfig();
-  return config.defaultProvider;
+  return getInstance(config.defaultInstanceId);
 }
 
-export function getEnabledProviders(): AIProvider[] {
+export function getDefaultInstanceId(): ProviderInstanceId {
   const config = loadUserConfig();
-  return Object.keys(config.providers).filter(
-    p => config.providers[p as AIProvider]?.enabled
-  ) as AIProvider[];
+  return config.defaultInstanceId;
 }
 
-export function hasProviderConfig(provider: AIProvider): boolean {
+export function getAllInstances(): ProviderInstance[] {
   const config = loadUserConfig();
-  return !!config.providers[provider]?.enabled;
+  return Object.values(config.instances);
+}
+
+export function getEnabledInstances(): ProviderInstance[] {
+  const config = loadUserConfig();
+  return Object.values(config.instances).filter(instance => instance.enabled);
+}
+
+export function getInstancesByProvider(provider: AIProvider): ProviderInstance[] {
+  const config = loadUserConfig();
+  return Object.values(config.instances).filter(instance => instance.provider === provider);
+}
+
+export function hasInstance(instanceId: ProviderInstanceId): boolean {
+  const config = loadUserConfig();
+  return !!config.instances[instanceId]?.enabled;
 }
 
 export function maskApiKey(encryptedApiKey: string): string {
@@ -326,7 +307,9 @@ export function maskApiKey(encryptedApiKey: string): string {
   }
 }
 
-export function getProviderConfigSummary(provider: AIProvider): {
+export function getInstanceSummary(instanceId: ProviderInstanceId): {
+  id: ProviderInstanceId;
+  name: string;
   provider: AIProvider;
   enabled: boolean;
   apiKeyMasked: string;
@@ -335,75 +318,83 @@ export function getProviderConfigSummary(provider: AIProvider): {
   parameters?: ModelParameters;
 } | null {
   const config = loadUserConfig();
-  const providerConfig = config.providers[provider];
+  const instance = config.instances[instanceId];
   
-  if (!providerConfig) {
+  if (!instance) {
     return null;
   }
   
   const result: { 
-    provider: AIProvider; 
+    id: ProviderInstanceId;
+    name: string;
+    provider: AIProvider;
     enabled: boolean; 
     apiKeyMasked: string; 
     model?: string; 
     baseUrl?: string;
     parameters?: ModelParameters;
   } = {
-    provider,
-    enabled: providerConfig.enabled,
-    apiKeyMasked: maskApiKey(providerConfig.apiKey),
+    id: instance.id,
+    name: instance.name,
+    provider: instance.provider,
+    enabled: instance.enabled,
+    apiKeyMasked: maskApiKey(instance.apiKey),
+    model: instance.model,
   };
   
-  if (providerConfig.model) {
-    result.model = providerConfig.model;
+  if (instance.baseUrl) {
+    result.baseUrl = instance.baseUrl;
   }
-  if (providerConfig.baseUrl) {
-    result.baseUrl = providerConfig.baseUrl;
-  }
-  if (providerConfig.parameters) {
-    result.parameters = providerConfig.parameters;
+  if (instance.parameters) {
+    result.parameters = instance.parameters;
   }
   
   return result;
 }
 
-export function getAllProviderSummaries(): Array<{
+export function getAllInstanceSummaries(): Array<{
+  id: ProviderInstanceId;
+  name: string;
   provider: AIProvider;
   enabled: boolean;
   apiKeyMasked: string;
-  model?: string;
-  baseUrl?: string;
-  parameters?: ModelParameters;
+  model?: string | undefined;
+  baseUrl?: string | undefined;
+  parameters?: ModelParameters | undefined;
 }> {
   const config = loadUserConfig();
   
-  return Object.keys(config.providers).map(provider => {
-    const pc = config.providers[provider as AIProvider];
-    const result: { 
-      provider: AIProvider; 
-      enabled: boolean; 
-      apiKeyMasked: string; 
-      model?: string; 
-      baseUrl?: string;
-      parameters?: ModelParameters;
-    } = {
-      provider: provider as AIProvider,
-      enabled: pc?.enabled ?? false,
-      apiKeyMasked: maskApiKey(pc?.apiKey ?? ''),
-    };
-    
-    if (pc?.model) {
-      result.model = pc.model;
-    }
-    if (pc?.baseUrl) {
-      result.baseUrl = pc.baseUrl;
-    }
-    if (pc?.parameters) {
-      result.parameters = pc.parameters;
-    }
-    
-    return result;
-  });
+  return Object.values(config.instances).map(instance => ({
+    id: instance.id,
+    name: instance.name,
+    provider: instance.provider,
+    enabled: instance.enabled,
+    apiKeyMasked: maskApiKey(instance.apiKey),
+    model: instance.model ?? undefined,
+    baseUrl: instance.baseUrl ?? undefined,
+    parameters: instance.parameters ?? undefined,
+  }));
+}
+
+export function setGlobalParameters(parameters: ModelParameters): void {
+  const config = loadUserConfig();
+  config.globalParameters = parameters;
+  saveUserConfig(config);
+}
+
+export function getGlobalParameters(): ModelParameters | null {
+  const config = loadUserConfig();
+  return config.globalParameters || null;
+}
+
+export function getEffectiveParameters(instanceId: ProviderInstanceId): ModelParameters {
+  const config = loadUserConfig();
+  const instance = config.instances[instanceId];
+  
+  return {
+    ...config.globalParameters,
+    ...instance?.parameters,
+  };
 }
 
 export function getCustomTones(): CustomTone[] {

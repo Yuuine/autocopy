@@ -513,9 +513,9 @@ export class AutoCopyApp {
 
   private listenProviderConfigChanges(): void {
     document.addEventListener('providerConfigChanged', ((e: CustomEvent) => {
-      const { providers, defaultProvider } = e.detail;
-      this.updateProviderSelect(providers, defaultProvider);
-      this.updateCurrentProviderInfo(providers, defaultProvider);
+      const { instances, defaultInstanceId } = e.detail;
+      this.updateInstanceSelect(instances, defaultInstanceId);
+      this.updateCurrentInstanceInfo(instances, defaultInstanceId);
     }) as EventListener);
   }
 
@@ -525,66 +525,66 @@ export class AutoCopyApp {
       if (!response.ok) throw new Error('Failed to load providers');
       
       const data = await response.json();
-      this.updateProviderSelect(data.providers, data.defaultProvider);
-      this.updateCurrentProviderInfo(data.providers, data.defaultProvider);
+      this.updateInstanceSelect(data.instances || [], data.defaultInstanceId || '');
+      this.updateCurrentInstanceInfo(data.instances || [], data.defaultInstanceId || '');
     } catch (error) {
       console.error('Error loading providers:', error);
     }
   }
 
-  private updateProviderSelect(providers: any[], defaultProvider: string): void {
+  private updateInstanceSelect(instances: any[], defaultInstanceId: string): void {
     const select = document.getElementById('provider') as HTMLSelectElement;
     if (!select) return;
 
-    const configuredProviders = providers.filter((p: any) => p.configured);
+    const enabledInstances = instances.filter((i: any) => i.enabled);
     
-    if (configuredProviders.length === 0) {
+    if (enabledInstances.length === 0) {
       select.innerHTML = '<option value="">请先配置模型</option>';
       select.disabled = true;
       return;
     }
     
     select.disabled = false;
-    select.innerHTML = '<option value="">请先选择模型</option>';
+    select.innerHTML = '';
     
-    const sortedProviders = [...configuredProviders].sort((a, b) => {
-      if (a.id === defaultProvider) return -1;
-      if (b.id === defaultProvider) return 1;
+    const sortedInstances = [...enabledInstances].sort((a, b) => {
+      if (a.id === defaultInstanceId) return -1;
+      if (b.id === defaultInstanceId) return 1;
       return 0;
     });
     
-    sortedProviders.forEach((provider: any) => {
+    sortedInstances.forEach((instance: any) => {
       const option = document.createElement('option');
-      option.value = provider.id;
-      option.textContent = `${provider.name}${provider.id === defaultProvider ? ' (默认)' : ''}`;
-      if (provider.id === defaultProvider) {
+      option.value = instance.id;
+      option.textContent = `${instance.name}${instance.id === defaultInstanceId ? ' (默认)' : ''}`;
+      if (instance.id === defaultInstanceId) {
         option.selected = true;
       }
       select.appendChild(option);
     });
   }
 
-  private updateCurrentProviderInfo(providers: any[], defaultProvider: string): void {
+  private updateCurrentInstanceInfo(instances: any[], defaultInstanceId: string): void {
     const container = document.getElementById('currentProviderInfo');
     if (!container) return;
 
-    const configuredProviders = providers.filter((p: any) => p.configured);
+    const enabledInstances = instances.filter((i: any) => i.enabled);
     
-    if (configuredProviders.length === 0) {
+    if (enabledInstances.length === 0) {
       container.innerHTML = '<span class="current-provider-name">未配置模型</span>';
       return;
     }
 
-    const providersHTML = configuredProviders
+    const instancesHTML = enabledInstances
       .sort((a: any, b: any) => {
-        if (a.id === defaultProvider) return -1;
-        if (b.id === defaultProvider) return 1;
+        if (a.id === defaultInstanceId) return -1;
+        if (b.id === defaultInstanceId) return 1;
         return 0;
       })
-      .map((p: any) => `<span class="provider-badge">${p.name}</span>`)
+      .map((i: any) => `<span class="provider-badge">${i.name}</span>`)
       .join('');
     
-    container.innerHTML = `<div class="provider-badges">${providersHTML}</div>`;
+    container.innerHTML = `<div class="provider-badges">${instancesHTML}</div>`;
   }
 
   private initArticleTypeCustom(): void {
@@ -700,12 +700,12 @@ export class AutoCopyApp {
     const articleTypeSelect = document.getElementById('articleType') as HTMLSelectElement;
     const articleTypeCustom = document.getElementById('articleTypeCustom') as HTMLInputElement;
     const toneSelect = document.getElementById('tone') as HTMLSelectElement;
-    const providerSelect = document.getElementById('provider') as HTMLSelectElement;
+    const instanceSelect = document.getElementById('provider') as HTMLSelectElement;
     
-    const provider = formData.get('provider') as string;
-    if (!provider) {
+    const instanceId = formData.get('provider') as string;
+    if (!instanceId) {
       toast.warning('请先选择模型');
-      providerSelect?.focus();
+      instanceSelect?.focus();
       return;
     }
     
@@ -731,7 +731,7 @@ export class AutoCopyApp {
       keywords: this.keywords.length > 0 ? this.keywords : undefined,
       additionalRequirements: this.additionalRequirementsTextarea?.getValue() || formData.get('additionalRequirements') || undefined,
       count: count,
-      provider: provider,
+      instanceId: instanceId,
     };
 
     const previewPrompt = formData.has('previewPrompt');
@@ -800,7 +800,7 @@ export class AutoCopyApp {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          provider: this.currentFormData.provider,
+          instanceId: this.currentFormData.instanceId,
           systemPrompt,
           userPrompt,
           count: this.currentFormData.count,
@@ -812,7 +812,7 @@ export class AutoCopyApp {
 
       if (result.success) {
         this.closePromptPreviewModal();
-        this.showResults(result.results, result.provider);
+        this.showResults(result.results, result.instanceId);
       } else {
         toast.error(result.error || '生成失败，请稍后重试');
       }
@@ -844,7 +844,7 @@ export class AutoCopyApp {
       const result = await response.json();
 
       if (result.success) {
-        this.showResults(result.results, result.provider);
+        this.showResults(result.results, result.instanceId);
       } else {
         this.showError(result.error || '生成失败，请稍后重试');
       }
@@ -870,13 +870,13 @@ export class AutoCopyApp {
     this.resultsContainer.innerHTML = '';
   }
 
-  private showResults(results: any[], provider?: string): void {
+  private showResults(results: any[], instanceId?: string): void {
     this.resultsContainer.innerHTML = '';
     
-    if (provider) {
+    if (instanceId) {
       const providerInfo = document.createElement('div');
       providerInfo.className = 'provider-info-badge';
-      providerInfo.innerHTML = `<span>模型: ${provider}</span>`;
+      providerInfo.innerHTML = `<span>模型: ${instanceId}</span>`;
       this.resultsContainer.appendChild(providerInfo);
     }
     

@@ -1,9 +1,6 @@
 import type { AIProvider, AIProviderConfig } from '../../types';
 import { BaseAIService } from './base';
 import { DeepSeekService } from './deepseek';
-import { OpenAIService } from './openai';
-import { ClaudeService } from './claude';
-import { WenxinService } from './wenxin';
 import { MoonshotService } from './moonshot';
 
 export interface AIFactoryConfig {
@@ -14,11 +11,6 @@ export interface AIFactoryConfig {
 export class AIServiceFactory {
   private static readonly serviceMap: Record<AIProvider, new (config: AIProviderConfig) => BaseAIService> = {
     deepseek: DeepSeekService,
-    openai: OpenAIService,
-    anthropic: ClaudeService,
-    wenxin: WenxinService,
-    qwen: DeepSeekService,
-    gemini: DeepSeekService,
     moonshot: MoonshotService,
   };
 

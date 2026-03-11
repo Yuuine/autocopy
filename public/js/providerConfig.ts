@@ -8,10 +8,12 @@ export interface ProviderInfo {
   requiresSecretKey: boolean;
   models: string[];
   configured: boolean;
-  parameters?: ModelParameters;
+  instances?: InstanceSummary[];
 }
 
-export interface ProviderConfig {
+export interface InstanceSummary {
+  id: string;
+  name: string;
   provider: string;
   enabled: boolean;
   apiKeyMasked: string;
@@ -75,11 +77,11 @@ export class ProviderConfigManager {
   private configModal: HTMLElement | null = null;
   private parametersModal: HTMLElement | null = null;
   private providers: ProviderInfo[] = [];
-  private defaultProvider: string = '';
-  private enabledProviders: string[] = [];
+  private instances: InstanceSummary[] = [];
+  private defaultInstanceId: string = '';
   private isInitialized: boolean = false;
   private initPromise: Promise<void> | null = null;
-  private currentParametersProvider: string = '';
+  private currentParametersInstanceId: string = '';
 
   constructor() {
     this.initPromise = this.init();
@@ -89,29 +91,29 @@ export class ProviderConfigManager {
     const event = new CustomEvent('providerConfigChanged', {
       detail: {
         providers: this.providers,
-        defaultProvider: this.defaultProvider,
-        enabledProviders: this.enabledProviders,
+        instances: this.instances,
+        defaultInstanceId: this.defaultInstanceId,
       },
     });
     document.dispatchEvent(event);
   }
 
   private async init(): Promise<void> {
-    await this.loadProviders();
+    await this.loadData();
     this.createConfigModal();
     this.bindGlobalEvents();
     this.isInitialized = true;
   }
 
-  private async loadProviders(): Promise<void> {
+  private async loadData(): Promise<void> {
     try {
       const response = await fetch('/api/providers');
       if (!response.ok) throw new Error('Failed to load providers');
       
       const data = await response.json();
-      this.providers = data.providers;
-      this.defaultProvider = data.defaultProvider;
-      this.enabledProviders = data.enabledProviders;
+      this.providers = data.providers || [];
+      this.instances = data.instances || [];
+      this.defaultInstanceId = data.defaultInstanceId || '';
     } catch (error) {
       console.error('Error loading providers:', error);
     }
@@ -135,7 +137,13 @@ export class ProviderConfigManager {
             <div class="provider-form" id="providerForm" style="display: none;">
               <h3 id="formTitle">配置模型</h3>
               <form id="configForm">
+                <input type="hidden" id="editInstanceId" />
                 <input type="hidden" id="providerId" />
+                <div class="form-group">
+                  <label for="instanceName">实例名称 <span class="required">*</span></label>
+                  <input type="text" id="instanceName" name="instanceName" required 
+                         placeholder="例如：Kimi K2.5、DeepSeek Coder" autocomplete="off" />
+                </div>
                 <div class="form-group">
                   <label for="apiKey">API 密钥 <span class="required">*</span></label>
                   <input type="password" id="apiKey" name="apiKey" required 
@@ -230,47 +238,65 @@ export class ProviderConfigManager {
       return;
     }
 
-    const sortedProviders = [...this.providers].sort((a, b) => {
-      if (a.configured && !b.configured) return -1;
-      if (!a.configured && b.configured) return 1;
-      if (a.id === this.defaultProvider) return -1;
-      if (b.id === this.defaultProvider) return 1;
-      return 0;
-    });
-
-    listEl.innerHTML = sortedProviders.map(provider => `
-      <div class="provider-card ${provider.configured ? 'configured' : ''}" data-provider="${provider.id}">
-        <div class="provider-info">
-          <h4>${provider.name}</h4>
-          <p>${provider.description}</p>
-          <div class="provider-meta">
-            ${provider.configured ? '<span class="status-badge configured">已配置</span>' : '<span class="status-badge">未配置</span>'}
-            ${this.defaultProvider === provider.id ? '<span class="default-badge">默认</span>' : ''}
+    let html = '';
+    
+    this.providers.forEach(provider => {
+      const providerInstances = this.instances.filter(i => i.provider === provider.id);
+      
+      html += `
+        <div class="provider-section" data-provider="${provider.id}">
+          <div class="provider-header">
+            <div class="provider-info">
+              <h4>${provider.name}</h4>
+              <p>${provider.description}</p>
+            </div>
+            <button class="btn btn-sm btn-add-instance" data-provider="${provider.id}" type="button">
+              + 添加实例
+            </button>
+          </div>
+          <div class="instance-list">
+      `;
+      
+      if (providerInstances.length === 0) {
+        html += '<div class="no-instance">暂无配置实例</div>';
+      } else {
+        providerInstances.forEach(instance => {
+          const isDefault = instance.id === this.defaultInstanceId;
+          html += `
+            <div class="instance-card ${isDefault ? 'default' : ''}" data-instance-id="${instance.id}">
+              <div class="instance-info">
+                <span class="instance-name">${instance.name}</span>
+                <span class="instance-model">${instance.model || '未选择模型'}</span>
+                ${isDefault ? '<span class="default-badge">默认</span>' : ''}
+              </div>
+              <div class="instance-actions">
+                ${!isDefault ? `
+                  <button class="btn btn-sm btn-set-default" data-instance-id="${instance.id}" type="button">
+                    设为默认
+                  </button>
+                ` : ''}
+                <button class="btn btn-sm btn-parameters" data-instance-id="${instance.id}" type="button" title="模型参数">
+                  参数
+                </button>
+                <button class="btn btn-sm btn-edit" data-instance-id="${instance.id}" type="button">
+                  编辑
+                </button>
+                <button class="btn btn-sm btn-danger btn-remove" data-instance-id="${instance.id}" type="button">
+                  删除
+                </button>
+              </div>
+            </div>
+          `;
+        });
+      }
+      
+      html += `
           </div>
         </div>
-        <div class="provider-actions">
-          <button class="btn btn-sm btn-configure" data-provider="${provider.id}" type="button">
-            ${provider.configured ? '修改配置' : '添加配置'}
-          </button>
-          ${provider.configured ? `
-            <button class="btn btn-sm btn-parameters" data-provider="${provider.id}" type="button" title="模型参数">
-              参数
-            </button>
-          ` : ''}
-          ${provider.configured && this.defaultProvider !== provider.id ? `
-            <button class="btn btn-sm btn-set-default" data-provider="${provider.id}" type="button">
-              设为默认
-            </button>
-          ` : ''}
-          ${provider.configured ? `
-            <button class="btn btn-sm btn-danger btn-remove" data-provider="${provider.id}" type="button">
-              删除
-            </button>
-          ` : ''}
-        </div>
-      </div>
-    `).join('');
+      `;
+    });
 
+    listEl.innerHTML = html;
     this.bindProviderListEvents();
   }
 
@@ -278,12 +304,21 @@ export class ProviderConfigManager {
     const listEl = this.configModal?.querySelector('#providerList');
     if (!listEl) return;
 
-    listEl.querySelectorAll('.btn-configure').forEach(btn => {
+    listEl.querySelectorAll('.btn-add-instance').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
         const providerId = (e.currentTarget as HTMLElement).dataset['provider'];
-        if (providerId) this.showForm(providerId);
+        if (providerId) this.showAddForm(providerId);
+      });
+    });
+
+    listEl.querySelectorAll('.btn-edit').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const instanceId = (e.currentTarget as HTMLElement).dataset['instanceId'];
+        if (instanceId) this.showEditForm(instanceId);
       });
     });
 
@@ -291,8 +326,8 @@ export class ProviderConfigManager {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        const providerId = (e.currentTarget as HTMLElement).dataset['provider'];
-        if (providerId) this.showParametersModal(providerId);
+        const instanceId = (e.currentTarget as HTMLElement).dataset['instanceId'];
+        if (instanceId) this.showParametersModal(instanceId);
       });
     });
 
@@ -300,8 +335,8 @@ export class ProviderConfigManager {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        const providerId = (e.currentTarget as HTMLElement).dataset['provider'];
-        if (providerId) this.setDefaultProvider(providerId);
+        const instanceId = (e.currentTarget as HTMLElement).dataset['instanceId'];
+        if (instanceId) this.setDefaultInstance(instanceId);
       });
     });
 
@@ -309,13 +344,13 @@ export class ProviderConfigManager {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        const providerId = (e.currentTarget as HTMLElement).dataset['provider'];
-        if (providerId) this.removeProvider(providerId);
+        const instanceId = (e.currentTarget as HTMLElement).dataset['instanceId'];
+        if (instanceId) this.removeInstance(instanceId);
       });
     });
   }
 
-  private showForm(providerId: string): void {
+  private showAddForm(providerId: string): void {
     const provider = this.providers.find(p => p.id === providerId);
     if (!provider) return;
 
@@ -325,12 +360,14 @@ export class ProviderConfigManager {
     
     if (listEl) listEl.style.display = 'none';
     if (formEl) formEl.style.display = 'block';
-    if (formTitle) formTitle.textContent = `配置 ${provider.name}`;
+    if (formTitle) formTitle.textContent = `添加 ${provider.name} 实例`;
 
+    const editInstanceIdInput = this.configModal?.querySelector('#editInstanceId') as HTMLInputElement;
     const providerIdInput = this.configModal?.querySelector('#providerId') as HTMLInputElement;
     const secretKeyGroup = this.configModal?.querySelector('#secretKeyGroup') as HTMLElement;
     const modelSelect = this.configModal?.querySelector('#modelSelect') as HTMLSelectElement;
 
+    if (editInstanceIdInput) editInstanceIdInput.value = '';
     if (providerIdInput) providerIdInput.value = providerId;
     
     if (secretKeyGroup) {
@@ -343,9 +380,49 @@ export class ProviderConfigManager {
       ).join('');
     }
 
+    (this.configModal?.querySelector('#instanceName') as HTMLInputElement).value = '';
     (this.configModal?.querySelector('#apiKey') as HTMLInputElement).value = '';
     (this.configModal?.querySelector('#secretKey') as HTMLInputElement).value = '';
     (this.configModal?.querySelector('#baseUrl') as HTMLInputElement).value = '';
+  }
+
+  private showEditForm(instanceId: string): void {
+    const instance = this.instances.find(i => i.id === instanceId);
+    if (!instance) return;
+
+    const provider = this.providers.find(p => p.id === instance.provider);
+    if (!provider) return;
+
+    const listEl = this.configModal?.querySelector('#providerList') as HTMLElement | null;
+    const formEl = this.configModal?.querySelector('#providerForm') as HTMLElement | null;
+    const formTitle = this.configModal?.querySelector('#formTitle');
+    
+    if (listEl) listEl.style.display = 'none';
+    if (formEl) formEl.style.display = 'block';
+    if (formTitle) formTitle.textContent = `编辑 ${instance.name}`;
+
+    const editInstanceIdInput = this.configModal?.querySelector('#editInstanceId') as HTMLInputElement;
+    const providerIdInput = this.configModal?.querySelector('#providerId') as HTMLInputElement;
+    const secretKeyGroup = this.configModal?.querySelector('#secretKeyGroup') as HTMLElement;
+    const modelSelect = this.configModal?.querySelector('#modelSelect') as HTMLSelectElement;
+
+    if (editInstanceIdInput) editInstanceIdInput.value = instanceId;
+    if (providerIdInput) providerIdInput.value = instance.provider;
+    
+    if (secretKeyGroup) {
+      secretKeyGroup.style.display = provider.requiresSecretKey ? 'block' : 'none';
+    }
+
+    if (modelSelect) {
+      modelSelect.innerHTML = provider.models.map(model => 
+        `<option value="${model}" ${model === instance.model ? 'selected' : ''}>${model}</option>`
+      ).join('');
+    }
+
+    (this.configModal?.querySelector('#instanceName') as HTMLInputElement).value = instance.name;
+    (this.configModal?.querySelector('#apiKey') as HTMLInputElement).value = '';
+    (this.configModal?.querySelector('#secretKey') as HTMLInputElement).value = '';
+    (this.configModal?.querySelector('#baseUrl') as HTMLInputElement).value = instance.baseUrl || '';
   }
 
   private hideForm(): void {
@@ -356,30 +433,30 @@ export class ProviderConfigManager {
     if (formEl) formEl.style.display = 'none';
   }
 
-  private showParametersModal(providerId: string): void {
-    const provider = this.providers.find(p => p.id === providerId);
-    if (!provider) return;
+  private showParametersModal(instanceId: string): void {
+    const instance = this.instances.find(i => i.id === instanceId);
+    if (!instance) return;
 
-    this.currentParametersProvider = providerId;
-    this.createParametersModal(provider);
+    this.currentParametersInstanceId = instanceId;
+    this.createParametersModal(instance);
     
     if (this.parametersModal) {
       this.parametersModal.classList.add('visible');
     }
   }
 
-  private createParametersModal(provider: ProviderInfo): void {
+  private createParametersModal(instance: InstanceSummary): void {
     if (this.parametersModal) {
       this.parametersModal.remove();
     }
 
-    const parameters = provider.parameters || {};
+    const parameters = instance.parameters || {};
     
     const modalHTML = `
       <div id="parametersModal" class="config-modal parameters-modal">
         <div class="config-modal-content parameters-modal-content">
           <div class="config-modal-header">
-            <h2>模型参数配置 - ${provider.name}</h2>
+            <h2>模型参数配置 - ${instance.name}</h2>
             <button class="config-modal-close" id="closeParametersModal" type="button">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M18 6L6 18"/>
@@ -563,7 +640,7 @@ export class ProviderConfigManager {
     const params = this.collectParameters();
     
     try {
-      const response = await fetch(`/api/providers/${this.currentParametersProvider}/parameters`, {
+      const response = await fetch(`/api/providers/instances/${this.currentParametersInstanceId}/parameters`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -575,7 +652,7 @@ export class ProviderConfigManager {
       
       if (response.ok && result.success) {
         toast.success(result.message || '参数已保存');
-        await this.loadProviders();
+        await this.loadData();
         this.renderProviderList();
         this.closeParametersModal();
         this.emitConfigChanged();
@@ -598,24 +675,61 @@ export class ProviderConfigManager {
     e.preventDefault();
     
     const form = e.target as HTMLFormElement;
+    const editInstanceId = (this.configModal?.querySelector('#editInstanceId') as HTMLInputElement).value;
     const providerId = (this.configModal?.querySelector('#providerId') as HTMLInputElement).value;
+    const instanceName = (form.querySelector('#instanceName') as HTMLInputElement).value.trim();
     const apiKey = (form.querySelector('#apiKey') as HTMLInputElement).value;
     const secretKey = (form.querySelector('#secretKey') as HTMLInputElement).value;
     const model = (form.querySelector('#modelSelect') as HTMLSelectElement).value;
     const baseUrl = (form.querySelector('#baseUrl') as HTMLInputElement).value;
 
+    if (!instanceName) {
+      toast.warning('请输入实例名称');
+      return;
+    }
+
     try {
-      const response = await fetch(`/api/providers/${providerId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apiKey, secretKey, model, baseUrl: baseUrl || undefined }),
-      });
+      let response: Response;
+      
+      if (editInstanceId) {
+        const updateData: Record<string, unknown> = {
+          name: instanceName,
+          model,
+        };
+        if (apiKey) updateData.apiKey = apiKey;
+        if (secretKey) updateData.secretKey = secretKey;
+        if (baseUrl) updateData.baseUrl = baseUrl;
+        
+        response = await fetch(`/api/providers/instances/${editInstanceId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updateData),
+        });
+      } else {
+        if (!apiKey) {
+          toast.warning('请输入 API 密钥');
+          return;
+        }
+        
+        response = await fetch('/api/providers/instances', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            provider: providerId, 
+            name: instanceName,
+            apiKey, 
+            secretKey, 
+            model, 
+            baseUrl: baseUrl || undefined 
+          }),
+        });
+      }
 
       const result = await response.json();
 
       if (response.ok) {
         toast.success(result.message);
-        await this.loadProviders();
+        await this.loadData();
         this.renderProviderList();
         this.hideForm();
         this.emitConfigChanged();
@@ -633,6 +747,7 @@ export class ProviderConfigManager {
     const apiKey = (this.configModal?.querySelector('#apiKey') as HTMLInputElement).value;
     const secretKey = (this.configModal?.querySelector('#secretKey') as HTMLInputElement).value;
     const baseUrl = (this.configModal?.querySelector('#baseUrl') as HTMLInputElement).value;
+    const model = (this.configModal?.querySelector('#modelSelect') as HTMLSelectElement).value;
 
     if (!apiKey) {
       toast.warning('请输入 API 密钥');
@@ -646,10 +761,10 @@ export class ProviderConfigManager {
     }
 
     try {
-      const response = await fetch(`/api/providers/${providerId}/validate`, {
+      const response = await fetch('/api/providers/validate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apiKey, secretKey, baseUrl: baseUrl || undefined }),
+        body: JSON.stringify({ provider: providerId, apiKey, secretKey, baseUrl: baseUrl || undefined, model }),
       });
 
       const result = await response.json();
@@ -669,16 +784,16 @@ export class ProviderConfigManager {
     }
   }
 
-  private async setDefaultProvider(providerId: string): Promise<void> {
+  private async setDefaultInstance(instanceId: string): Promise<void> {
     try {
-      const response = await fetch(`/api/providers/${providerId}/default`, {
+      const response = await fetch(`/api/providers/instances/${instanceId}/default`, {
         method: 'POST',
       });
 
       const result = await response.json();
 
       if (response.ok) {
-        this.defaultProvider = providerId;
+        this.defaultInstanceId = instanceId;
         this.renderProviderList();
         this.emitConfigChanged();
         toast.success(result.message);
@@ -691,19 +806,19 @@ export class ProviderConfigManager {
     }
   }
 
-  private async removeProvider(providerId: string): Promise<void> {
-    const res = await dialog.confirm('确定要删除此模型配置吗？', '确认删除');
+  private async removeInstance(instanceId: string): Promise<void> {
+    const res = await dialog.confirm('确定要删除此模型实例吗？', '确认删除');
     if (!res.confirmed) return;
 
     try {
-      const response = await fetch(`/api/providers/${providerId}`, {
+      const response = await fetch(`/api/providers/instances/${instanceId}`, {
         method: 'DELETE',
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        await this.loadProviders();
+        await this.loadData();
         this.renderProviderList();
         this.emitConfigChanged();
         toast.success(data.message);
@@ -711,7 +826,7 @@ export class ProviderConfigManager {
         toast.error(data.message || '删除失败');
       }
     } catch (error) {
-      console.error('Error removing provider:', error);
+      console.error('Error removing instance:', error);
       toast.error('删除配置时发生错误');
     }
   }
@@ -732,12 +847,12 @@ export class ProviderConfigManager {
     }
   }
 
-  public getDefaultProvider(): string {
-    return this.defaultProvider;
+  public getDefaultInstanceId(): string {
+    return this.defaultInstanceId;
   }
 
-  public getEnabledProviders(): string[] {
-    return this.enabledProviders;
+  public getInstances(): InstanceSummary[] {
+    return this.instances;
   }
 }
 
