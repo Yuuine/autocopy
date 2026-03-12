@@ -69,3 +69,11 @@ export interface AIServiceError {
   provider: AIProvider;
   details?: Record<string, unknown>;
 }
+
+export interface AIStreamChunk {
+  content: string;
+  done: boolean;
+  error?: string;
+}
+
+export type AIStreamGenerator = AsyncGenerator<AIStreamChunk, void, unknown>;

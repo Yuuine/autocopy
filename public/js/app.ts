@@ -57,6 +57,7 @@ export class AutoCopyApp {
   private scoringModal: HTMLElement | null = null;
   private enableScoring: boolean = false;
   private currentInstanceId: string | null = null;
+  private backToTopBtn: HTMLButtonElement | null = null;
 
   constructor() {
     this.form = document.getElementById('generateForm') as HTMLFormElement;
@@ -81,6 +82,8 @@ export class AutoCopyApp {
     this.createCustomToneModal();
     this.createScoringModal();
     this.bindCustomToneEvents();
+    this.initBackToTop();
+    this.checkScrollPosition();
     logger.info('应用初始化完成');
   }
 
@@ -1036,37 +1039,256 @@ export class AutoCopyApp {
     this.hideResults();
     
     const timer = logger.timer('generateDirectly');
-    logger.info('发送生成请求...', { instanceId: data.instanceId, count: data.count });
+    logger.info('发送流式生成请求...', { instanceId: data.instanceId, count: data.count });
 
     try {
-      const start = Date.now();
-      const response = await fetch('/api/copywriting/generate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      });
-      const duration = Date.now() - start;
-
-      const result = await response.json();
-      
-      logApiCall('/api/copywriting/generate', 'POST', duration, response.status);
-      logger.debug('生成结果:', { success: result.success, count: result.results?.length });
-
-      if (result.success) {
-        logger.info(`生成成功: ${result.results.length} 个结果`);
-        this.showResults(result.results, result.instanceId);
-      } else {
-        logger.warn(`生成失败: ${result.error}`);
-        this.showError(result.error || '生成失败，请稍后重试');
-      }
+      await this.generateStream(data);
     } catch (error) {
       logger.error('网络错误:', error);
       this.showError('网络错误，请检查服务器是否正常运行');
     } finally {
       timer();
       this.setLoading(false);
+    }
+  }
+
+  private async generateStream(data: any): Promise<void> {
+    const start = Date.now();
+    
+    this.resultsContainer.innerHTML = '';
+    
+    if (data.instanceId) {
+      const providerInfo = document.createElement('div');
+      providerInfo.className = 'provider-info-badge';
+      providerInfo.innerHTML = `<span>模型: ${data.instanceId}</span>`;
+      this.resultsContainer.appendChild(providerInfo);
+    }
+    
+    this.resultsSection.style.display = 'block';
+    
+    setTimeout(() => {
+      this.resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+
+    const response = await fetch('/api/copywriting/generate-stream', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: '请求失败' }));
+      throw new Error(errorData.error || `HTTP ${response.status}`);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('无法读取响应流');
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+    const results: any[] = [];
+    const cards: HTMLElement[] = [];
+    const cardContents: string[] = [];
+    let currentVersionIndex = -1;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      
+      if (done) {
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('event: ')) {
+          continue;
+        }
+        
+        if (line.startsWith('data: ')) {
+          const dataStr = line.slice(6);
+          try {
+            const event = JSON.parse(dataStr);
+            
+            if (event.versionIndex !== undefined && event.versionIndex !== currentVersionIndex) {
+              currentVersionIndex = event.versionIndex;
+            }
+            
+            switch (true) {
+              case dataStr.includes('"version_start"') || (event.versionIndex !== undefined && event.totalVersions !== undefined):
+                const startCard = this.createLoadingCard(currentVersionIndex + 1, event.totalVersions);
+                this.resultsContainer.appendChild(startCard);
+                cards.push(startCard);
+                cardContents.push('');
+                break;
+                
+              case dataStr.includes('"content_start"'):
+                if (cards[event.versionIndex]) {
+                  this.prepareCardForTyping(cards[event.versionIndex]);
+                }
+                break;
+                
+              case event.content !== undefined && !dataStr.includes('"version_complete"'):
+                if (cards[event.versionIndex]) {
+                  cardContents[event.versionIndex] += event.content;
+                  this.appendStreamContent(cards[event.versionIndex], cardContents[event.versionIndex]);
+                  this.checkScrollPosition();
+                }
+                break;
+                
+              case event.result !== undefined:
+                const result = event.result;
+                results[event.versionIndex] = result;
+                
+                if (cards[event.versionIndex]) {
+                  this.finalizeCard(cards[event.versionIndex], result);
+                }
+                break;
+                
+              case event.error !== undefined:
+                if (cards[event.versionIndex]) {
+                  this.updateCardWithError(cards[event.versionIndex], event.error);
+                }
+                break;
+            }
+          } catch (parseError) {
+            logger.warn('解析SSE数据失败:', parseError);
+          }
+        }
+      }
+    }
+
+    const duration = Date.now() - start;
+    logApiCall('/api/copywriting/generate-stream', 'POST', duration, response.status);
+    logger.info(`流式生成完成: ${results.filter(r => r).length} 个结果`);
+
+    if (this.enableScoring && results.length > 0) {
+      this.scoreResultsSequentially(cards, results);
+    }
+  }
+
+  private createLoadingCard(version: number, totalVersions: number): HTMLElement {
+    const card = document.createElement('div');
+    card.className = 'result-card loading';
+    card.innerHTML = `
+      <div class="result-header">
+        <span class="result-title">版本 ${version}/${totalVersions}</span>
+        <div class="result-meta">
+          <span class="meta-item loading-indicator">
+            <span class="loading-spinner"></span>
+            生成中...
+          </span>
+        </div>
+      </div>
+      <div class="result-content loading-content">
+        <div class="loading-placeholder"></div>
+      </div>
+      <div class="result-actions" style="visibility: hidden;">
+        <button class="btn-copy">复制</button>
+      </div>
+    `;
+    return card;
+  }
+
+  private updateCardWithResult(card: HTMLElement, result: any): void {
+    card.classList.remove('loading');
+    
+    const header = card.querySelector('.result-header');
+    if (header) {
+      const meta = header.querySelector('.result-meta');
+      if (meta) {
+        const scoreHtml = this.enableScoring 
+          ? '<span class="meta-item score-placeholder"><span class="score-loading">评分中...</span></span>' 
+          : '';
+        meta.innerHTML = `
+          ${scoreHtml}
+          <span class="meta-item">字数: ${result.wordCount}</span>
+        `;
+      }
+    }
+    
+    const content = card.querySelector('.result-content');
+    if (content) {
+      content.classList.remove('loading-content');
+      content.innerHTML = this.escapeHtml(result.content);
+    }
+    
+    const actions = card.querySelector('.result-actions') as HTMLElement;
+    if (actions) {
+      actions.style.visibility = 'visible';
+      const copyBtn = actions.querySelector('.btn-copy') as HTMLButtonElement;
+      if (copyBtn) {
+        copyBtn.dataset.content = this.escapeHtml(result.content);
+        copyBtn.addEventListener('click', () => this.copyToClipboard(copyBtn, result.content));
+      }
+    }
+  }
+
+  private prepareCardForTyping(card: HTMLElement): void {
+    card.classList.remove('loading');
+    card.classList.add('typing');
+    
+    const content = card.querySelector('.result-content');
+    if (content) {
+      content.classList.remove('loading-content');
+      content.innerHTML = '<span class="typing-cursor"></span>';
+    }
+  }
+
+  private appendStreamContent(card: HTMLElement, fullContent: string): void {
+    const content = card.querySelector('.result-content');
+    if (!content) return;
+
+    content.innerHTML = this.escapeHtml(fullContent) + '<span class="typing-cursor"></span>';
+  }
+
+  private finalizeCard(card: HTMLElement, result: any): void {
+    card.classList.remove('typing');
+    
+    const content = card.querySelector('.result-content');
+    if (content) {
+      content.innerHTML = this.escapeHtml(result.content);
+    }
+
+    const header = card.querySelector('.result-header');
+    if (header) {
+      const meta = header.querySelector('.result-meta');
+      if (meta) {
+        const scoreHtml = this.enableScoring 
+          ? '<span class="meta-item score-placeholder"><span class="score-loading">评分中...</span></span>' 
+          : '';
+        meta.innerHTML = `
+          ${scoreHtml}
+          <span class="meta-item">字数: ${result.wordCount}</span>
+        `;
+      }
+    }
+
+    const actions = card.querySelector('.result-actions') as HTMLElement;
+    if (actions) {
+      actions.style.visibility = 'visible';
+      const copyBtn = actions.querySelector('.btn-copy') as HTMLButtonElement;
+      if (copyBtn) {
+        copyBtn.dataset.content = this.escapeHtml(result.content);
+        copyBtn.addEventListener('click', () => this.copyToClipboard(copyBtn, result.content));
+      }
+    }
+  }
+
+  private updateCardWithError(card: HTMLElement, error: string): void {
+    card.classList.remove('loading');
+    card.classList.add('error');
+    
+    const content = card.querySelector('.result-content');
+    if (content) {
+      content.classList.remove('loading-content');
+      content.innerHTML = `<div class="error-message">生成失败: ${this.escapeHtml(error)}</div>`;
     }
   }
 
@@ -1226,6 +1448,54 @@ export class AutoCopyApp {
       setTimeout(() => {
         button.textContent = '复制';
       }, 2000);
+    }
+  }
+
+  private initBackToTop(): void {
+    this.backToTopBtn = document.getElementById('backToTop') as HTMLButtonElement;
+    if (!this.backToTopBtn) return;
+
+    this.backToTopBtn.addEventListener('click', () => {
+      window.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+      });
+    });
+
+    window.addEventListener('scroll', () => {
+      this.updateBackToTopVisibility();
+    });
+  }
+
+  private updateBackToTopVisibility(): void {
+    if (!this.backToTopBtn) return;
+
+    const scrollY = window.scrollY;
+    const showThreshold = 300;
+
+    if (scrollY > showThreshold) {
+      this.backToTopBtn.classList.add('visible');
+    } else {
+      this.backToTopBtn.classList.remove('visible');
+    }
+  }
+
+  private checkScrollPosition(): void {
+    const resultsSection = this.resultsSection;
+    if (!resultsSection || resultsSection.style.display === 'none') return;
+
+    const rect = resultsSection.getBoundingClientRect();
+    const viewportHeight = window.innerHeight;
+    const triggerThreshold = viewportHeight * 0.6;
+
+    if (rect.bottom > triggerThreshold && rect.top < viewportHeight) {
+      const overflow = rect.bottom - triggerThreshold;
+      if (overflow > 50) {
+        window.scrollBy({
+          top: Math.min(overflow + 30, 150),
+          behavior: 'smooth'
+        });
+      }
     }
   }
 

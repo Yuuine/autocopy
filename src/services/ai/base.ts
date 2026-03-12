@@ -1,9 +1,10 @@
 import type { 
   AIProvider, 
   AIRequest, 
-  AIResponse, 
+  AIResponse,
   AIProviderConfig,
-  AIMessage
+  AIMessage,
+  AIStreamGenerator
 } from '../../types';
 
 export abstract class BaseAIService {
@@ -15,6 +16,7 @@ export abstract class BaseAIService {
   }
 
   abstract chat(request: AIRequest): Promise<AIResponse>;
+  abstract chatStream(request: AIRequest): AIStreamGenerator;
 
   protected validateConfig(): void {
     if (!this.config.apiKey) {

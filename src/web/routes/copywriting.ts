@@ -162,6 +162,152 @@ router.post('/generate', async (req: Request, res: Response, next: NextFunction)
   }
 });
 
+router.post('/generate-stream', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const {
+      articleType,
+      tone,
+      useParagraphs,
+      useEmoji,
+      useHashtag,
+      content,
+      wordCount,
+      keywords,
+      additionalRequirements,
+      count,
+      instanceId: requestedInstanceId,
+      customToneId,
+    } = req.body as GenerateRequestBody;
+
+    if (!content || content.trim().length === 0) {
+      logger.warn('请求验证失败: 内容描述为空');
+      throw createError('内容描述不能为空', 400);
+    }
+
+    const instanceId = requestedInstanceId ?? getDefaultInstanceId();
+    
+    if (!instanceId || !hasInstance(instanceId)) {
+      logger.warn(`模型实例不存在: ${instanceId}`);
+      throw createError('请先配置模型实例', 400);
+    }
+
+    const config = getInstanceDecrypted(instanceId);
+    if (!config) {
+      throw createError(`模型实例 ${instanceId} 未配置或已禁用`, 400);
+    }
+
+    const instance = getInstance(instanceId);
+    if (!instance) {
+      throw createError(`无法获取模型实例 ${instanceId}`, 400);
+    }
+
+    let finalTone = tone || '轻松';
+    if (customToneId) {
+      const customTone = getCustomToneById(customToneId);
+      if (customTone) {
+        finalTone = customTone.name as typeof finalTone;
+      }
+    }
+
+    const request: CopywritingRequest = {
+      articleType: articleType || '推广文案',
+      tone: finalTone as import('../../types').Tone,
+      useParagraphs: useParagraphs ?? true,
+      useEmoji: useEmoji ?? false,
+      useHashtag: useHashtag ?? false,
+      content: content.trim(),
+      wordCount: wordCount ?? 500,
+      ...(keywords && keywords.length > 0 ? { keywords } : {}),
+      ...(additionalRequirements ? { additionalRequirements } : {}),
+    };
+
+    const serviceConfig: { apiKey: string; secretKey?: string; baseUrl?: string; model?: string | undefined } = {
+      apiKey: config.apiKey,
+      model: config.model ?? undefined,
+    };
+    
+    if (config.secretKey) {
+      serviceConfig.secretKey = config.secretKey;
+    }
+    if (config.baseUrl) {
+      serviceConfig.baseUrl = config.baseUrl;
+    }
+
+    const aiService = AIServiceFactory.createService(instance.provider, serviceConfig);
+    const generator = new CopyGenerator(aiService);
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+
+    const sendEvent = (event: string, data: unknown) => {
+      res.write(`event: ${event}\n`);
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    try {
+      const stream = generator.generateStream(request, { count: count ?? 3 });
+      
+      for await (const chunk of stream) {
+        if (res.writableEnded) break;
+        
+        switch (chunk.type) {
+          case 'version_start':
+            sendEvent('version_start', {
+              versionIndex: chunk.versionIndex,
+              totalVersions: chunk.totalVersions,
+            });
+            break;
+          case 'content_start':
+            sendEvent('content_start', {
+              versionIndex: chunk.versionIndex,
+            });
+            break;
+          case 'content':
+            sendEvent('content', {
+              versionIndex: chunk.versionIndex,
+              content: chunk.content,
+            });
+            break;
+          case 'version_complete':
+            sendEvent('version_complete', {
+              versionIndex: chunk.versionIndex,
+              result: chunk.result,
+            });
+            break;
+          case 'error':
+            sendEvent('error', {
+              versionIndex: chunk.versionIndex,
+              error: chunk.error,
+            });
+            break;
+          case 'complete':
+            sendEvent('complete', {});
+            break;
+        }
+      }
+    } catch (streamError) {
+      logger.error('流式生成出错:', streamError instanceof Error ? streamError.message : streamError);
+      sendEvent('error', { error: streamError instanceof Error ? streamError.message : 'Unknown error' });
+    }
+
+    res.end();
+  } catch (error) {
+    logger.error('流式生成请求出错:', error instanceof Error ? error.message : error);
+    
+    if (!res.headersSent) {
+      if (error instanceof Error) {
+        if (error.message.includes('API key')) {
+          return next(createError('API 密钥无效或已过期，请检查配置', 401));
+        }
+        return next(createError(error.message, 400));
+      }
+      next(createError('生成失败', 500));
+    }
+  }
+});
+
 router.get('/options', (_req: Request, res: Response): void => {
   res.json({
     articleTypes: [
