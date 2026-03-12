@@ -53,6 +53,11 @@
   color: var(--color-text-secondary);
 }
 
+.result-meta .meta-item {
+  display: inline-flex;
+  align-items: center;
+}
+
 .result-content {
   white-space: pre-wrap;
   word-wrap: break-word;

@@ -22,7 +22,7 @@ interface GenerateRequestBody extends CopywritingRequest {
 async function generateWithInstance(
   instanceId: ProviderInstanceId,
   request: CopywritingRequest,
-  options?: { count?: number; enableScoring?: boolean }
+  options?: { count?: number }
 ) {
   const timer = logger.timer('generateWithInstance');
   
@@ -61,36 +61,6 @@ async function generateWithInstance(
   const result = await generator.generate(request, genOptions);
 
   logger.debug(`生成结果: success=${result.success}, count=${result.results.length}`);
-
-  if (options?.enableScoring && result.success && result.results.length > 0) {
-    logger.info('开始评分流程...');
-    const scoringService = new ScoringService(aiService);
-    
-    const scoringContext: { articleType?: string; tone?: string; wordCount?: number } = {
-      articleType: request.articleType,
-      tone: request.tone,
-      wordCount: request.wordCount,
-    };
-    
-    const scoredResults = await Promise.all(result.results.map(async (item, idx) => {
-      try {
-        logger.debug(`评分第 ${idx + 1} 个结果, 内容长度: ${item.content?.length}`);
-        const score = await scoringService.scoreContent(item.content, scoringContext);
-        logger.info(`评分完成 [${idx + 1}]: ${score.percentage}分`);
-        return { ...item, score };
-      } catch (error) {
-        logger.warn(`评分失败 [${idx + 1}]:`, error instanceof Error ? error.message : error);
-        return item;
-      }
-    }));
-
-    logger.info(`所有评分完成, 成功: ${scoredResults.filter(r => r.score).length}/${scoredResults.length}`);
-    timer();
-    return {
-      ...result,
-      results: scoredResults,
-    };
-  }
   
   timer();
   return result;
@@ -113,12 +83,11 @@ router.post('/generate', async (req: Request, res: Response, next: NextFunction)
       count,
       instanceId: requestedInstanceId,
       customToneId,
-      enableScoring,
     } = req.body as GenerateRequestBody;
 
     logger.info(`收到生成请求: 类型=${articleType || '其他'}, 语气=${tone || '轻松'}, 字数=${wordCount}, 数量=${count || 3}`);
 
-    if (!content) {
+    if (!content || content.trim().length === 0) {
       logger.warn('请求验证失败: 内容描述为空');
       throw createError('内容描述不能为空', 400);
     }
@@ -165,7 +134,6 @@ router.post('/generate', async (req: Request, res: Response, next: NextFunction)
 
     const result = await generateWithInstance(instanceId, request, {
       count: count ?? 3,
-      enableScoring: enableScoring ?? false,
     });
 
     if (result.success) {
@@ -235,7 +203,7 @@ router.post('/preview', (req: Request, res: Response): void => {
       customToneId,
     } = req.body as GenerateRequestBody;
 
-    if (!content) {
+    if (!content || content.trim().length === 0) {
       throw createError('内容描述不能为空', 400);
     }
 

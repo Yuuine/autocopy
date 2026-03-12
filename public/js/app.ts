@@ -22,15 +22,16 @@ interface ScoringDetail {
   criteria: string;
   score: number;
   maxScore: number;
-  comment: string;
 }
 
 interface ScoringResult {
   totalScore: number;
   maxScore: number;
   percentage: number;
+  grade: 'excellent' | 'good' | 'needs_improvement' | 'poor';
+  gradeLabel: string;
   details: ScoringDetail[];
-  summary: string;
+  diagnosis: string;
   suggestions: string[];
 }
 
@@ -345,7 +346,7 @@ export class AutoCopyApp {
       <div id="scoringModal" class="scoring-modal">
         <div class="scoring-content">
           <div class="scoring-header">
-            <h2>文案评分详情</h2>
+            <h2>诊断分析</h2>
             <button class="scoring-close" id="closeScoringModal" type="button">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M18 6L6 18"/>
@@ -396,40 +397,45 @@ export class AutoCopyApp {
     const body = this.scoringModal.querySelector('#scoringBody');
     if (!body) return;
 
-    const scoreColor = this.getScoreColor(score.percentage);
+    const grade = score.grade;
+    const gradeLabel = score.gradeLabel;
     
     body.innerHTML = `
-      <div class="scoring-overview">
-        <div class="scoring-total">
-          <div class="scoring-circle" style="--score-color: ${scoreColor}">
-            <span class="scoring-percentage">${score.percentage}</span>
-            <span class="scoring-label">分</span>
-          </div>
-          <div class="scoring-summary">${this.escapeHtml(score.summary)}</div>
+      <div class="scoring-status-section">
+        <div class="scoring-status-icon ${grade}">
+          ${this.getStatusIcon(grade)}
         </div>
+        <div class="scoring-status-label ${grade}">${gradeLabel}</div>
       </div>
-      <div class="scoring-details">
-        <h3>评分细则</h3>
-        <div class="scoring-criteria-list">
-          ${score.details.map(detail => `
-            <div class="scoring-criteria-item">
-              <div class="criteria-header">
-                <span class="criteria-name">${this.escapeHtml(detail.criteria)}</span>
-                <span class="criteria-score" style="color: ${this.getScoreColor((detail.score / detail.maxScore) * 100)}">
-                  ${detail.score}/${detail.maxScore}
-                </span>
+      
+      <div class="scoring-dimensions-section">
+        <h3 class="scoring-section-title">维度评分</h3>
+        ${score.details.map(detail => {
+          const detailGrade = this.getGradeFromScore(detail.score);
+          return `
+            <div class="dimension-item">
+              <div class="dimension-header">
+                <span class="dimension-name">${this.escapeHtml(detail.criteria)}</span>
+                <span class="dimension-score-badge ${detailGrade}">${detail.score}</span>
               </div>
-              <div class="criteria-bar">
-                <div class="criteria-bar-fill" style="width: ${(detail.score / detail.maxScore) * 100}%; background: ${this.getScoreColor((detail.score / detail.maxScore) * 100)}"></div>
+              <div class="dimension-bar">
+                <div class="dimension-bar-fill ${detailGrade}" style="width: ${detail.score}%"></div>
               </div>
-              <p class="criteria-comment">${this.escapeHtml(detail.comment)}</p>
             </div>
-          `).join('')}
-        </div>
+          `;
+        }).join('')}
       </div>
-      ${score.suggestions.length > 0 ? `
-        <div class="scoring-suggestions">
-          <h3>改进建议</h3>
+      
+      ${score.diagnosis ? `
+        <div class="scoring-diagnosis-section">
+          <h3 class="scoring-section-title">诊断分析</h3>
+          <div class="diagnosis-content">${this.escapeHtml(score.diagnosis)}</div>
+        </div>
+      ` : ''}
+      
+      ${score.suggestions && score.suggestions.length > 0 ? `
+        <div class="scoring-suggestions-section">
+          <h3 class="scoring-section-title">改进建议</h3>
           <ul class="suggestions-list">
             ${score.suggestions.map(s => `<li>${this.escapeHtml(s)}</li>`).join('')}
           </ul>
@@ -440,16 +446,38 @@ export class AutoCopyApp {
     this.scoringModal.classList.add('visible');
   }
 
+  private getStatusIcon(grade: string): string {
+    switch (grade) {
+      case 'excellent':
+      case 'good':
+        return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+          <path d="M20 6L9 17l-5-5"/>
+        </svg>`;
+      case 'needs_improvement':
+        return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+          <path d="M12 9v4"/>
+          <path d="M12 17h.01"/>
+        </svg>`;
+      case 'poor':
+        return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+          <path d="M18 6L6 18"/>
+          <path d="M6 6l12 12"/>
+        </svg>`;
+      default:
+        return '';
+    }
+  }
+
+  private getGradeFromScore(score: number): string {
+    if (score >= 90) return 'excellent';
+    if (score >= 75) return 'good';
+    if (score >= 60) return 'needs_improvement';
+    return 'poor';
+  }
+
   private closeScoringModal(): void {
     if (!this.scoringModal) return;
     this.scoringModal.classList.remove('visible');
-  }
-
-  private getScoreColor(percentage: number): string {
-    if (percentage >= 80) return '#34c759';
-    if (percentage >= 60) return '#0071e3';
-    if (percentage >= 40) return '#ff9500';
-    return '#ff3b30';
   }
 
   private async fetchScore(content: string): Promise<ScoringResult | null> {
@@ -873,6 +901,13 @@ export class AutoCopyApp {
       return;
     }
     
+    const contentValue = this.contentTextarea?.getValue() || formData.get('content') as string;
+    if (!contentValue || contentValue.trim().length === 0) {
+      toast.warning('请输入内容描述');
+      this.contentTextarea?.focus();
+      return;
+    }
+    
     const articleType = articleTypeSelect.value === 'custom' 
       ? articleTypeCustom.value 
       : articleTypeSelect.value;
@@ -893,7 +928,7 @@ export class AutoCopyApp {
       useParagraphs: formData.has('useParagraphs'),
       useEmoji: formData.has('useEmoji'),
       useHashtag: formData.has('useHashtag'),
-      content: this.contentTextarea?.getValue() || formData.get('content'),
+      content: contentValue,
       wordCount: parseInt(formData.get('wordCount') as string, 10),
       keywords: this.keywords.length > 0 ? this.keywords : undefined,
       additionalRequirements: this.additionalRequirementsTextarea?.getValue() || formData.get('additionalRequirements') || undefined,
@@ -1059,32 +1094,52 @@ export class AutoCopyApp {
       this.resultsContainer.appendChild(providerInfo);
     }
     
+    const cards: HTMLElement[] = [];
     results.forEach((result, index) => {
       const card = this.createResultCard(result, index + 1);
       this.resultsContainer.appendChild(card);
+      cards.push(card);
     });
 
     this.resultsSection.style.display = 'block';
     this.resultsSection.scrollIntoView({ behavior: 'smooth' });
+
+    if (this.enableScoring) {
+      this.scoreResultsSequentially(cards, results);
+    }
+  }
+
+  private async scoreResultsSequentially(cards: HTMLElement[], results: any[]): Promise<void> {
+    for (let i = 0; i < results.length; i++) {
+      if (i > 0) {
+        await this.delay(500);
+      }
+      
+      const card = cards[i];
+      const result = results[i];
+      
+      await this.attachScoringToCard(card, result.content);
+    }
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   private createResultCard(result: any, index: number): HTMLElement {
     const card = document.createElement('div');
     card.className = 'result-card';
     
-    console.log(`[createResultCard] Index ${index}, enableScoring: ${this.enableScoring}, hasScore: ${!!result.score}`, result.score);
-    
-    const hasScore = this.enableScoring && result.score && result.score.percentage !== undefined;
-    const scoreHtml = hasScore 
-      ? `<span class="score-badge clickable" style="background: ${this.getScoreColor(result.score.percentage)}" title="点击查看评分详情">${result.score.percentage}分</span>`
-      : (this.enableScoring ? '<span class="score-placeholder"><span class="score-loading">评分中...</span></span>' : '');
+    const scoreHtml = this.enableScoring 
+      ? '<span class="meta-item score-placeholder"><span class="score-loading">评分中...</span></span>' 
+      : '';
     
     card.innerHTML = `
       <div class="result-header">
         <span class="result-title">版本 ${index}</span>
         <div class="result-meta">
           ${scoreHtml}
-          <span>字数: ${result.wordCount}</span>
+          <span class="meta-item">字数: ${result.wordCount}</span>
         </div>
       </div>
       <div class="result-content">${this.escapeHtml(result.content)}</div>
@@ -1095,15 +1150,6 @@ export class AutoCopyApp {
 
     const copyBtn = card.querySelector('.btn-copy') as HTMLButtonElement;
     copyBtn.addEventListener('click', () => this.copyToClipboard(copyBtn, result.content));
-
-    if (hasScore) {
-      const scoreBadge = card.querySelector('.score-badge');
-      scoreBadge?.addEventListener('click', () => {
-        this.openScoringModal(result.score);
-      });
-    } else if (this.enableScoring) {
-      this.attachScoringToCard(card, result.content);
-    }
 
     return card;
   }
@@ -1117,8 +1163,8 @@ export class AutoCopyApp {
     if (score) {
       const scoreColor = this.getScoreColor(score.percentage);
       scorePlaceholder.innerHTML = `
-        <span class="score-badge clickable" style="background: ${scoreColor}" title="点击查看评分详情">
-          ${score.percentage}分
+        <span class="meta-item score-badge clickable" style="color: ${scoreColor}" title="点击查看诊断分析">
+          分数: ${score.percentage}
         </span>
       `;
       
@@ -1127,7 +1173,32 @@ export class AutoCopyApp {
         this.openScoringModal(score);
       });
     } else {
-      scorePlaceholder.innerHTML = '<span class="score-error">评分失败</span>';
+      scorePlaceholder.innerHTML = '<span class="meta-item score-error">评分失败</span>';
+    }
+  }
+
+  private getScoreColor(score: number): string {
+    if (score >= 75) {
+      return '#22c55e';
+    } else if (score >= 50) {
+      return '#f97316';
+    } else {
+      return '#ef4444';
+    }
+  }
+
+  private getGradeColor(grade: string): string {
+    switch (grade) {
+      case 'excellent':
+        return '#2e7d32';
+      case 'good':
+        return '#388e3c';
+      case 'needs_improvement':
+        return '#f57c00';
+      case 'poor':
+        return '#c62828';
+      default:
+        return '#666';
     }
   }
 
