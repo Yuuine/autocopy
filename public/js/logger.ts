@@ -22,11 +22,11 @@ const LEVEL_STYLES: Record<LogLevel, string> = {
   error: 'color: #dc3545; font-weight: bold;',
 };
 
-const LEVEL_ICONS: Record<LogLevel, string> = {
-  debug: '🔍',
-  info: 'ℹ️',
-  warn: '⚠️',
-  error: '❌',
+const LEVEL_LABELS: Record<LogLevel, string> = {
+  debug: 'DEBUG',
+  info: 'INFO ',
+  warn: 'WARN ',
+  error: 'ERROR',
 };
 
 interface PersistedLog {
@@ -91,8 +91,7 @@ class FrontendLogger {
     this.persistLog(level, message, args);
 
     const timestamp = this.config.showTimestamp ? `%c${this.formatTimestamp()}%c` : '';
-    const icon = LEVEL_ICONS[level];
-    const levelStr = level.toUpperCase().padEnd(5);
+    const levelStr = LEVEL_LABELS[level];
     const contextStr = `[${this.context}]`;
 
     const styles: string[] = [];
@@ -105,7 +104,7 @@ class FrontendLogger {
     }
 
     if (this.config.showLevel) {
-      parts.push(`${icon} %c${levelStr}%c`);
+      parts.push(`%c${levelStr}%c`);
       styles.push(LEVEL_STYLES[level]);
       styles.push('color: inherit;');
     }
@@ -147,10 +146,10 @@ class FrontendLogger {
 
   timer(label: string): () => void {
     const start = Date.now();
-    this.debug(`⏱️ ${label} - started`);
+    this.debug(`[${label}] started`);
     return () => {
       const duration = Date.now() - start;
-      this.debug(`⏱️ ${label} - completed in ${duration}ms`);
+      this.debug(`[${label}] completed in ${duration}ms`);
     };
   }
 
@@ -228,9 +227,9 @@ export function logApiCall(
 export function logUserAction(action: string, details?: Record<string, unknown>): void {
   const logger = createLogger('User');
   if (details) {
-    logger.info(`👆 ${action}`, details);
+    logger.info(action, details);
   } else {
-    logger.info(`👆 ${action}`);
+    logger.info(action);
   }
 }
 

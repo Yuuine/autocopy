@@ -35,11 +35,11 @@ const LEVEL_COLORS: Record<LogLevel, string> = {
   error: COLORS.red,
 };
 
-const LEVEL_ICONS: Record<LogLevel, string> = {
-  debug: '🔍',
-  info: 'ℹ️',
-  warn: '⚠️',
-  error: '❌',
+const LEVEL_LABELS: Record<LogLevel, string> = {
+  debug: 'DEBUG',
+  info: 'INFO ',
+  warn: 'WARN ',
+  error: 'ERROR',
 };
 
 class Logger {
@@ -80,12 +80,11 @@ class Logger {
     }
 
     if (this.config.showLevel) {
-      const icon = LEVEL_ICONS[level];
-      const levelStr = level.toUpperCase().padEnd(5);
+      const levelStr = LEVEL_LABELS[level];
       if (this.config.colorize) {
-        parts.push(`${LEVEL_COLORS[level]}${icon} ${levelStr}${COLORS.reset}`);
+        parts.push(`${LEVEL_COLORS[level]}${levelStr}${COLORS.reset}`);
       } else {
-        parts.push(`${icon} ${levelStr}`);
+        parts.push(levelStr);
       }
     }
 
@@ -136,10 +135,10 @@ class Logger {
 
   timer(label: string): () => void {
     const start = Date.now();
-    this.debug(`⏱️ ${label} - started`);
+    this.debug(`[${label}] started`);
     return () => {
       const duration = Date.now() - start;
-      this.debug(`⏱️ ${label} - completed in ${duration}ms`);
+      this.debug(`[${label}] completed in ${duration}ms`);
     };
   }
 
@@ -203,7 +202,7 @@ export function logApiCall(
     parts.push(`${duration}ms`);
   }
   
-  logger.info(`🤖 API Call: ${parts.join(' | ')}`);
+  logger.info(`API Call: ${parts.join(' | ')}`);
 }
 
 export { Logger };
