@@ -6,16 +6,16 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "build:frontend": "tsc -p tsconfig.frontend.json",
+    "build:frontend": "tsc -p public/src/tsconfig.json",
     "build:all": "npm run build && npm run build:frontend",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
     "web": "node dist/web/server.js",
     "dev:web": "ts-node src/web/server.ts",
     "dev:web:hot": "nodemon --watch src --ext ts --exec ts-node src/web/server.ts",
-    "dev:frontend:watch": "tsc -p tsconfig.frontend.json --watch",
+    "dev:frontend:watch": "tsc -p public/src/tsconfig.json --watch",
     "dev:full": "concurrently \"npm run dev:frontend:watch\" \"npm run dev:web:hot\"",
-    "clean": "rimraf dist"
+    "clean": "rimraf dist public/js"
   },
   "keywords": [
     "copywriting",

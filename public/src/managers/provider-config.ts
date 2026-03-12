@@ -1,77 +1,9 @@
-import { toast, dialog } from './modal.js';
+import { toast, dialog } from '../components/index.js';
+import { apiClient } from '../utils/api.js';
+import { createLogger } from '../utils/logger.js';
+import type { ProviderInfo, InstanceSummary, ModelParameters, PARAMETER_CONFIGS } from '../types/provider.js';
 
-export interface ProviderInfo {
-  id: string;
-  name: string;
-  description: string;
-  defaultModel: string;
-  requiresSecretKey: boolean;
-  models: string[];
-  configured: boolean;
-  instances?: InstanceSummary[];
-}
-
-export interface InstanceSummary {
-  id: string;
-  name: string;
-  provider: string;
-  enabled: boolean;
-  apiKeyMasked: string;
-  model?: string;
-  baseUrl?: string;
-  parameters?: ModelParameters;
-}
-
-export interface ModelParameters {
-  temperature?: number;
-  maxTokens?: number;
-  topP?: number;
-  presencePenalty?: number;
-  frequencyPenalty?: number;
-}
-
-const PARAMETER_CONFIGS = {
-  temperature: {
-    label: '温度 (Temperature)',
-    description: '控制输出的随机性。值越高输出越随机，值越低输出越确定。',
-    min: 0,
-    max: 2,
-    step: 0.1,
-    default: 0.7,
-  },
-  maxTokens: {
-    label: '最大生成长度 (Max Tokens)',
-    description: '控制生成的最大 token 数量。',
-    min: 100,
-    max: 8000,
-    step: 100,
-    default: 2000,
-  },
-  topP: {
-    label: 'Top P',
-    description: '核采样参数。控制模型从概率最高的 token 中选择的比例。',
-    min: 0,
-    max: 1,
-    step: 0.05,
-    default: 1,
-  },
-  presencePenalty: {
-    label: '存在惩罚 (Presence Penalty)',
-    description: '正值会惩罚新 token 是否出现在现有文本中，增加模型谈论新话题的可能性。',
-    min: -2,
-    max: 2,
-    step: 0.1,
-    default: 0,
-  },
-  frequencyPenalty: {
-    label: '频率惩罚 (Frequency Penalty)',
-    description: '正值会根据 token 在现有文本中的频率进行惩罚，降低重复相同内容的可能性。',
-    min: -2,
-    max: 2,
-    step: 0.1,
-    default: 0,
-  },
-};
+const logger = createLogger('ProviderConfig');
 
 export class ProviderConfigManager {
   private configModal: HTMLElement | null = null;
@@ -107,15 +39,12 @@ export class ProviderConfigManager {
 
   private async loadData(): Promise<void> {
     try {
-      const response = await fetch('/api/providers');
-      if (!response.ok) throw new Error('Failed to load providers');
-      
-      const data = await response.json();
+      const data = await apiClient.getProviders();
       this.providers = data.providers || [];
       this.instances = data.instances || [];
       this.defaultInstanceId = data.defaultInstanceId || '';
     } catch (error) {
-      console.error('Error loading providers:', error);
+      logger.error('加载模型配置失败:', error);
     }
   }
 
@@ -433,6 +362,144 @@ export class ProviderConfigManager {
     if (formEl) formEl.style.display = 'none';
   }
 
+  private async handleSubmit(e: Event): Promise<void> {
+    e.preventDefault();
+    
+    const form = e.target as HTMLFormElement;
+    const editInstanceId = (this.configModal?.querySelector('#editInstanceId') as HTMLInputElement).value;
+    const providerId = (this.configModal?.querySelector('#providerId') as HTMLInputElement).value;
+    const instanceName = (form.querySelector('#instanceName') as HTMLInputElement).value.trim();
+    const apiKey = (form.querySelector('#apiKey') as HTMLInputElement).value;
+    const secretKey = (form.querySelector('#secretKey') as HTMLInputElement).value;
+    const model = (form.querySelector('#modelSelect') as HTMLSelectElement).value;
+    const baseUrl = (form.querySelector('#baseUrl') as HTMLInputElement).value;
+
+    try {
+      let result;
+      
+      if (editInstanceId) {
+        const updateData: Record<string, unknown> = {
+          name: instanceName,
+          model,
+        };
+        if (apiKey) updateData.apiKey = apiKey;
+        if (secretKey) updateData.secretKey = secretKey;
+        if (baseUrl) updateData.baseUrl = baseUrl;
+        
+        result = await apiClient.updateInstance(editInstanceId, updateData as any);
+      } else {
+        if (!apiKey) {
+          toast.warning('请输入 API 密钥');
+          return;
+        }
+        
+        result = await apiClient.createInstance({
+          provider: providerId, 
+          name: instanceName,
+          apiKey, 
+          secretKey, 
+          model, 
+          baseUrl: baseUrl || undefined 
+        });
+      }
+
+      if (result.success) {
+        toast.success(result.message);
+        await this.loadData();
+        this.renderProviderList();
+        this.hideForm();
+        this.emitConfigChanged();
+      } else {
+        toast.error(result.message || '保存失败');
+      }
+    } catch (error) {
+      logger.error('保存配置失败:', error);
+      toast.error('保存配置时发生错误');
+    }
+  }
+
+  private async handleValidate(): Promise<void> {
+    const providerId = (this.configModal?.querySelector('#providerId') as HTMLInputElement).value;
+    const apiKey = (this.configModal?.querySelector('#apiKey') as HTMLInputElement).value;
+    const secretKey = (this.configModal?.querySelector('#secretKey') as HTMLInputElement).value;
+    const baseUrl = (this.configModal?.querySelector('#baseUrl') as HTMLInputElement).value;
+    const model = (this.configModal?.querySelector('#modelSelect') as HTMLSelectElement).value;
+
+    if (!apiKey) {
+      toast.warning('请输入 API 密钥');
+      return;
+    }
+
+    const validateBtn = this.configModal?.querySelector('#validateBtn') as HTMLButtonElement;
+    if (validateBtn) {
+      validateBtn.disabled = true;
+      validateBtn.textContent = '验证中...';
+    }
+
+    try {
+      const result = await apiClient.validateProvider({
+        provider: providerId, 
+        apiKey, 
+        secretKey, 
+        baseUrl: baseUrl || undefined, 
+        model
+      });
+      
+      if (result.success) {
+        toast.success(result.message);
+      } else {
+        toast.error(result.message);
+      }
+    } catch (error) {
+      logger.error('验证失败:', error);
+      toast.error('验证失败');
+    } finally {
+      if (validateBtn) {
+        validateBtn.disabled = false;
+        validateBtn.textContent = '验证密钥';
+      }
+    }
+  }
+
+  private async setDefaultInstance(instanceId: string): Promise<void> {
+    try {
+      const result = await apiClient.setDefaultInstance(instanceId);
+
+      if (result.success) {
+        this.defaultInstanceId = instanceId;
+        this.renderProviderList();
+        this.emitConfigChanged();
+        toast.success(result.message);
+      } else {
+        toast.error(result.message || '设置失败');
+      }
+    } catch (error) {
+      logger.error('设置默认模型失败:', error);
+      toast.error('设置默认模型时发生错误');
+    }
+  }
+
+  private async removeInstance(instanceId: string): Promise<void> {
+    const res = await dialog.confirm('确定要删除此模型实例吗？', '确认删除');
+    if (!res.confirmed) return;
+
+    try {
+      const result = await apiClient.deleteInstance(instanceId);
+
+      if (result.success) {
+        await this.loadData();
+        this.renderProviderList();
+        this.emitConfigChanged();
+        toast.success(result.message);
+      } else {
+        toast.error(result.message || '删除失败');
+      }
+    } catch (error) {
+      logger.error('删除配置失败:', error);
+      toast.error('删除配置时发生错误');
+    }
+  }
+
   private showParametersModal(instanceId: string): void {
     const instance = this.instances.find(i => i.id === instanceId);
     if (!instance) return;
@@ -451,6 +518,48 @@ export class ProviderConfigManager {
     }
 
     const parameters = instance.parameters || {};
+    const PARAMETER_CONFIGS = {
+      temperature: {
+        label: '温度 (Temperature)',
+        description: '控制输出的随机性。值越高输出越随机，值越低输出越确定。',
+        min: 0,
+        max: 2,
+        step: 0.1,
+        default: 0.7,
+      },
+      maxTokens: {
+        label: '最大生成长度 (Max Tokens)',
+        description: '控制生成的最大 token 数量。',
+        min: 100,
+        max: 8000,
+        step: 100,
+        default: 2000,
+      },
+      topP: {
+        label: 'Top P',
+        description: '核采样参数。控制模型从概率最高的 token 中选择的比例。',
+        min: 0,
+        max: 1,
+        step: 0.05,
+        default: 1,
+      },
+      presencePenalty: {
+        label: '存在惩罚 (Presence Penalty)',
+        description: '正值会惩罚新 token 是否出现在现有文本中，增加模型谈论新话题的可能性。',
+        min: -2,
+        max: 2,
+        step: 0.1,
+        default: 0,
+      },
+      frequencyPenalty: {
+        label: '频率惩罚 (Frequency Penalty)',
+        description: '正值会根据 token 在现有文本中的频率进行惩罚，降低重复相同内容的可能性。',
+        min: -2,
+        max: 2,
+        step: 0.1,
+        default: 0,
+      },
+    };
     
     const modalHTML = `
       <div id="parametersModal" class="config-modal parameters-modal">
@@ -513,10 +622,10 @@ export class ProviderConfigManager {
     document.body.insertAdjacentHTML('beforeend', modalHTML);
     this.parametersModal = document.getElementById('parametersModal');
     
-    this.bindParametersModalEvents();
+    this.bindParametersModalEvents(PARAMETER_CONFIGS);
   }
 
-  private bindParametersModalEvents(): void {
+  private bindParametersModalEvents(PARAMETER_CONFIGS: Record<string, any>): void {
     if (!this.parametersModal) return;
 
     const closeBtn = this.parametersModal.querySelector('#closeParametersModal');
@@ -527,7 +636,7 @@ export class ProviderConfigManager {
     closeBtn?.addEventListener('click', () => this.closeParametersModal());
     cancelBtn?.addEventListener('click', () => this.closeParametersModal());
     saveBtn?.addEventListener('click', () => this.saveParameters());
-    resetBtn?.addEventListener('click', () => this.resetParametersToDefaults());
+    resetBtn?.addEventListener('click', () => this.resetParametersToDefaults(PARAMETER_CONFIGS));
 
     this.parametersModal.addEventListener('click', (e) => {
       if (e.target === this.parametersModal) {
@@ -592,7 +701,7 @@ export class ProviderConfigManager {
     });
   }
 
-  private resetParametersToDefaults(): void {
+  private resetParametersToDefaults(PARAMETER_CONFIGS: Record<string, any>): void {
     Object.entries(PARAMETER_CONFIGS).forEach(([key, config]) => {
       const field = this.parametersModal?.querySelector(`.parameter-field[data-param-key="${key}"]`) as HTMLElement;
       const enableCheckbox = this.parametersModal?.querySelector(`#enable-${key}`) as HTMLInputElement;
@@ -621,7 +730,9 @@ export class ProviderConfigManager {
   private collectParameters(): ModelParameters {
     const params: ModelParameters = {};
     
-    Object.keys(PARAMETER_CONFIGS).forEach(key => {
+    const keys = ['temperature', 'maxTokens', 'topP', 'presencePenalty', 'frequencyPenalty'];
+    
+    keys.forEach(key => {
       const enableCheckbox = this.parametersModal?.querySelector(`#enable-${key}`) as HTMLInputElement;
       const numberInput = this.parametersModal?.querySelector(`#input-${key}`) as HTMLInputElement;
       
@@ -640,17 +751,9 @@ export class ProviderConfigManager {
     const params = this.collectParameters();
     
     try {
-      const response = await fetch(`/api/providers/instances/${this.currentParametersInstanceId}/parameters`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(params),
-      });
+      const result = await apiClient.updateInstanceParameters(this.currentParametersInstanceId, params);
       
-      const result = await response.json();
-      
-      if (response.ok && result.success) {
+      if (result.success) {
         toast.success(result.message || '参数已保存');
         await this.loadData();
         this.renderProviderList();
@@ -660,7 +763,7 @@ export class ProviderConfigManager {
         toast.error(result.message || '保存失败');
       }
     } catch (error) {
-      console.error('Error saving parameters:', error);
+      logger.error('保存参数失败:', error);
       toast.error('保存参数时发生错误');
     }
   }
@@ -668,161 +771,6 @@ export class ProviderConfigManager {
   private closeParametersModal(): void {
     if (this.parametersModal) {
       this.parametersModal.classList.remove('visible');
-    }
-  }
-
-  private async handleSubmit(e: Event): Promise<void> {
-    e.preventDefault();
-    
-    const form = e.target as HTMLFormElement;
-    const editInstanceId = (this.configModal?.querySelector('#editInstanceId') as HTMLInputElement).value;
-    const providerId = (this.configModal?.querySelector('#providerId') as HTMLInputElement).value;
-    const instanceName = (form.querySelector('#instanceName') as HTMLInputElement).value.trim();
-    const apiKey = (form.querySelector('#apiKey') as HTMLInputElement).value;
-    const secretKey = (form.querySelector('#secretKey') as HTMLInputElement).value;
-    const model = (form.querySelector('#modelSelect') as HTMLSelectElement).value;
-    const baseUrl = (form.querySelector('#baseUrl') as HTMLInputElement).value;
-
-    try {
-      let response: Response;
-      
-      if (editInstanceId) {
-        const updateData: Record<string, unknown> = {
-          name: instanceName,
-          model,
-        };
-        if (apiKey) updateData.apiKey = apiKey;
-        if (secretKey) updateData.secretKey = secretKey;
-        if (baseUrl) updateData.baseUrl = baseUrl;
-        
-        response = await fetch(`/api/providers/instances/${editInstanceId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updateData),
-        });
-      } else {
-        if (!apiKey) {
-          toast.warning('请输入 API 密钥');
-          return;
-        }
-        
-        response = await fetch('/api/providers/instances', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            provider: providerId, 
-            name: instanceName,
-            apiKey, 
-            secretKey, 
-            model, 
-            baseUrl: baseUrl || undefined 
-          }),
-        });
-      }
-
-      const result = await response.json();
-
-      if (response.ok) {
-        toast.success(result.message);
-        await this.loadData();
-        this.renderProviderList();
-        this.hideForm();
-        this.emitConfigChanged();
-      } else {
-        toast.error(result.message || '保存失败');
-      }
-    } catch (error) {
-      console.error('Error saving config:', error);
-      toast.error('保存配置时发生错误');
-    }
-  }
-
-  private async handleValidate(): Promise<void> {
-    const providerId = (this.configModal?.querySelector('#providerId') as HTMLInputElement).value;
-    const apiKey = (this.configModal?.querySelector('#apiKey') as HTMLInputElement).value;
-    const secretKey = (this.configModal?.querySelector('#secretKey') as HTMLInputElement).value;
-    const baseUrl = (this.configModal?.querySelector('#baseUrl') as HTMLInputElement).value;
-    const model = (this.configModal?.querySelector('#modelSelect') as HTMLSelectElement).value;
-
-    if (!apiKey) {
-      toast.warning('请输入 API 密钥');
-      return;
-    }
-
-    const validateBtn = this.configModal?.querySelector('#validateBtn') as HTMLButtonElement;
-    if (validateBtn) {
-      validateBtn.disabled = true;
-      validateBtn.textContent = '验证中...';
-    }
-
-    try {
-      const response = await fetch('/api/providers/validate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider: providerId, apiKey, secretKey, baseUrl: baseUrl || undefined, model }),
-      });
-
-      const result = await response.json();
-      if (result.success) {
-        toast.success(result.message);
-      } else {
-        toast.error(result.message);
-      }
-    } catch (error) {
-      console.error('Error validating:', error);
-      toast.error('验证失败');
-    } finally {
-      if (validateBtn) {
-        validateBtn.disabled = false;
-        validateBtn.textContent = '验证密钥';
-      }
-    }
-  }
-
-  private async setDefaultInstance(instanceId: string): Promise<void> {
-    try {
-      const response = await fetch(`/api/providers/instances/${instanceId}/default`, {
-        method: 'POST',
-      });
-
-      const result = await response.json();
-
-      if (response.ok) {
-        this.defaultInstanceId = instanceId;
-        this.renderProviderList();
-        this.emitConfigChanged();
-        toast.success(result.message);
-      } else {
-        toast.error(result.message || '设置失败');
-      }
-    } catch (error) {
-      console.error('Error setting default:', error);
-      toast.error('设置默认模型时发生错误');
-    }
-  }
-
-  private async removeInstance(instanceId: string): Promise<void> {
-    const res = await dialog.confirm('确定要删除此模型实例吗？', '确认删除');
-    if (!res.confirmed) return;
-
-    try {
-      const response = await fetch(`/api/providers/instances/${instanceId}`, {
-        method: 'DELETE',
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        await this.loadData();
-        this.renderProviderList();
-        this.emitConfigChanged();
-        toast.success(data.message);
-      } else {
-        toast.error(data.message || '删除失败');
-      }
-    } catch (error) {
-      console.error('Error removing instance:', error);
-      toast.error('删除配置时发生错误');
     }
   }
 
